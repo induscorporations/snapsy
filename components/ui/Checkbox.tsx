@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { typography } from '@/constants/tokens';
 import { 
   PRIMARY, 
   G300, 
@@ -62,7 +63,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   label: {
-    fontSize: 14,
+    fontSize: typography.size.base,
     fontFamily: Fonts.regular,
     color: G700,
   },

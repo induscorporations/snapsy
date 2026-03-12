@@ -1,187 +1,258 @@
-import React, { useState } from 'react';
+// components/ui/Input.tsx
+import React, { useState, useRef } from 'react';
 import {
-  StyleSheet,
-  Text,
-  TextInput,
-  TextInputProps,
   View,
-  ViewStyle,
+  TextInput,
+  Text,
   TouchableOpacity,
-  NativeSyntheticEvent,
-  TextInputFocusEventData,
+  StyleSheet,
+  type TextInputProps,
 } from 'react-native';
+import { colors, radii, typography, TAP_TARGET } from '@/constants/tokens';
 
-import { 
-  Colors, 
-  Fonts, 
-  RADIUS, 
-  SPACING, 
-  G200, 
-  PRIMARY, 
-  ERROR, 
-  G100, 
-  G50, 
-  G900, 
-  G400, 
-  G600, 
-  G800 
-} from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Icon, IconName } from './Icon';
+// ─── TYPES ───────────────────────────────────────────────────────────────────
+export type InputState = 'default' | 'focused' | 'error' | 'disabled';
 
-interface InputProps extends TextInputProps {
-  label?: string;
-  error?: string;
-  helperText?: string;
-  icon?: IconName;
-  prefix?: string;
+export interface InputProps extends Omit<TextInputProps, 'style'> {
+  label?:              string;
+  helperText?:         string;
+  state?:              InputState;
+  iconLeft?:           React.ReactNode;  // always linear (outline)
+  iconRight?:          React.ReactNode;
+  prefix?:             string;
   showPasswordToggle?: boolean;
-  containerStyle?: ViewStyle;
+  containerStyle?:     object;
 }
 
+// ─── COMPONENT ───────────────────────────────────────────────────────────────
 export function Input({
   label,
-  error,
   helperText,
-  icon,
+  state            = 'default',
+  iconLeft,
+  iconRight,
   prefix,
   showPasswordToggle,
   containerStyle,
-  style,
   onFocus,
   onBlur,
-  secureTextEntry,
-  ...props
+  ...rest
 }: InputProps) {
-  const colorScheme = useColorScheme() ?? 'light';
-  const theme = Colors[colorScheme];
-  const [isFocused, setIsFocused] = useState(false);
-  const [showPw, setShowPw] = useState(false);
+  const [focused,    setFocused]    = useState(false);
+  const [showSecret, setShowSecret] = useState(false);
 
-  const handleFocus = (e: NativeSyntheticEvent<TextInputFocusEventData>) => {
-    setIsFocused(true);
-    if (onFocus) onFocus(e as any);
-  };
+  const derivedState: InputState =
+    state === 'disabled' ? 'disabled' :
+    state === 'error'    ? 'error'    :
+    focused              ? 'focused'  : 'default';
 
-  const handleBlur = (e: NativeSyntheticEvent<TextInputFocusEventData>) => {
-    setIsFocused(false);
-    if (onBlur) onBlur(e as any);
-  };
+  const borderColor = {
+    default:  colors.grey200,
+    focused:  colors.primary,
+    error:    colors.error,
+    disabled: colors.grey100,
+  }[derivedState];
 
-  const state = props.editable === false ? 'disabled' : error ? 'error' : isFocused ? 'focused' : 'default';
-
-  const borders = {
-    default: G200,
-    focused: PRIMARY,
-    error: ERROR,
-    disabled: G100,
-  };
+  const focusShadow = derivedState === 'focused' ? styles.shadowFocus :
+                      derivedState === 'error'   ? styles.shadowError : undefined;
 
   return (
-    <View style={[styles.container, containerStyle]}>
-      {label && <Text style={styles.label}>{label}</Text>}
-      <View
-        style={[
-          styles.inputContainer,
-          {
-            backgroundColor: state === 'disabled' ? G50 : '#FFFFFF',
-            borderColor: borders[state],
-            borderWidth: isFocused || error ? 2 : 1.5,
-          },
-        ]}
-      >
-        {icon && (
-          <Icon
-            name={icon}
-            size={16}
-            color={isFocused ? PRIMARY : G400}
-            style={{ marginRight: 8 }}
-          />
+    <View style={[styles.wrapper, containerStyle]}>
+
+      {label && (
+        <Text style={styles.label}>{label}</Text>
+      )}
+
+      <View style={[
+        styles.field,
+        { borderColor, backgroundColor: state === 'disabled' ? colors.grey50 : colors.white },
+        focusShadow,
+      ]}>
+        {/* Left icon — linear (outline only), no fill */}
+        {iconLeft && <View style={styles.sideIcon}>{iconLeft}</View>}
+
+        {prefix && (
+          <Text style={styles.prefix}>{prefix}</Text>
         )}
-        {prefix && <Text style={styles.prefix}>{prefix}</Text>}
+
         <TextInput
-          style={[
-            styles.input,
-            {
-              color: G800,
-            },
-            style,
-          ]}
-          placeholderTextColor={G400}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          secureTextEntry={secureTextEntry && !showPw}
-          editable={props.editable}
-          {...props}
+          style={styles.input}
+          editable={state !== 'disabled'}
+          secureTextEntry={showPasswordToggle ? !showSecret : rest.secureTextEntry}
+          placeholderTextColor={colors.grey400}
+          onFocus={e => { setFocused(true);  onFocus?.(e); }}
+          onBlur={e  => { setFocused(false); onBlur?.(e); }}
+          selectionColor={colors.primary}
+          {...rest}
         />
+
+        {/* Password toggle */}
         {showPasswordToggle && (
-          <TouchableOpacity onPress={() => setShowPw(!showPw)} style={styles.toggle}>
-            <Icon name={showPw ? 'eye' : 'eyeOff'} size={16} color={G400} />
+          <TouchableOpacity
+            onPress={() => setShowSecret(s => !s)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.sideIcon}
+          >
+            {/* Replace placeholder with Eye/EyeOff from lucide-react-native */}
+            <Text style={{ color: colors.grey400, fontSize: typography.size.xs, fontFamily: typography.fontFamily.semibold }}>
+              {showSecret ? 'HIDE' : 'SHOW'}
+            </Text>
           </TouchableOpacity>
         )}
-        {state === 'error' && <Icon name="alertCircle" size={16} solid color={ERROR} style={{ marginLeft: 8 }} />}
+
+        {/* Right icon — solid AlertCircle on error, custom icon otherwise */}
+        {!showPasswordToggle && (
+          derivedState === 'error'
+            ? <View style={styles.sideIcon}>
+                {/* Replace with: <AlertCircle size={16} color={colors.error} fill={colors.error} strokeWidth={0} /> */}
+                <View style={styles.errorIndicator} />
+              </View>
+            : iconRight
+            ? <View style={styles.sideIcon}>{iconRight}</View>
+            : null
+        )}
       </View>
-      {(helperText || error) && (
-        <View style={styles.helperRow}>
-          <Icon
-            name={error ? 'xCircle' : 'info'}
-            size={12}
-            solid={!!error}
-            color={error ? ERROR : G400}
-            style={{ marginRight: 4 }}
-          />
-          <Text style={[styles.helperText, { color: error ? ERROR : G400 }]}>
-            {error || helperText}
-          </Text>
-        </View>
+
+      {helperText && (
+        <Text style={[styles.helper, derivedState === 'error' && styles.helperError]}>
+          {helperText}
+        </Text>
       )}
     </View>
   );
 }
 
+// ─── OTP INPUT ───────────────────────────────────────────────────────────────
+export interface OTPInputProps {
+  length?:   number;
+  value?:    string[];
+  onChange?: (values: string[], joined: string) => void;
+}
+
+export function OTPInput({ length = 6, value, onChange }: OTPInputProps) {
+  const [vals, setVals] = useState<string[]>(value ?? Array(length).fill(''));
+  const inputRefs = Array.from({ length }, () => useRef<TextInput>(null));
+
+  const handleChange = (text: string, index: number) => {
+    // Only keep last character typed
+    const char = text.slice(-1);
+    const next = [...vals];
+    next[index] = char;
+    setVals(next);
+    onChange?.(next, next.join(''));
+    if (char && index < length - 1) {
+      inputRefs[index + 1]?.current?.focus();
+    }
+  };
+
+  const handleKeyPress = (key: string, index: number) => {
+    if (key === 'Backspace' && !vals[index] && index > 0) {
+      const next = [...vals];
+      next[index - 1] = '';
+      setVals(next);
+      onChange?.(next, next.join(''));
+      inputRefs[index - 1]?.current?.focus();
+    }
+  };
+
+  return (
+    <View style={otpStyles.row}>
+      {Array(length).fill(0).map((_, i) => (
+        <TextInput
+          key={i}
+          ref={inputRefs[i]}
+          style={[otpStyles.cell, vals[i] ? otpStyles.cellActive : null]}
+          maxLength={1}
+          keyboardType="number-pad"
+          value={vals[i]}
+          onChangeText={text => handleChange(text, i)}
+          onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, i)}
+          textAlign="center"
+          selectionColor={colors.primary}
+        />
+      ))}
+    </View>
+  );
+}
+
+// ─── STYLES ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
-    width: '100%',
-    marginBottom: SPACING.md,
-  },
+  wrapper:   { gap: 6 },
   label: {
-    fontFamily: Fonts.bold,
-    fontSize: 12,
-    fontWeight: '600',
-    color: G600,
-    marginBottom: 6,
+    fontSize:   typography.size.sm,
+    fontFamily: typography.fontFamily.semibold,
+    color:      colors.grey600,
   },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 48,
-    borderRadius: 16,
+  field: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    height:            TAP_TARGET,
+    borderRadius:      radii.lg,
+    borderWidth:       1.5,
     paddingHorizontal: 14,
+    gap:               8,
   },
-  prefix: {
-    fontFamily: Fonts.medium,
-    fontSize: 12,
-    color: G400,
-    fontWeight: '500',
-    marginRight: 8,
+  shadowFocus: {
+    shadowColor:   colors.primary,
+    shadowOffset:  { width: 0, height: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius:  6,
+    elevation:     3,
+  },
+  shadowError: {
+    shadowColor:   colors.error,
+    shadowOffset:  { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius:  6,
+    elevation:     3,
   },
   input: {
-    flex: 1,
-    height: '100%',
-    fontFamily: Fonts.regular,
-    fontSize: 14,
+    flex:               1,
+    height:             '100%',
+    fontSize:           typography.size.base,
+    fontFamily:         typography.fontFamily.regular,
+    color:              colors.grey800,
+    includeFontPadding: false,
   },
-  toggle: {
-    padding: 4,
+  prefix: {
+    fontSize:   typography.size.sm,
+    fontFamily: typography.fontFamily.medium,
+    color:      colors.grey400,
+    flexShrink: 0,
   },
-  helperRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
+  sideIcon:         { flexShrink: 0 },
+  helper: {
+    fontSize:   typography.size.xs,
+    fontFamily: typography.fontFamily.medium,
+    color:      colors.grey400,
   },
-  helperText: {
-    fontFamily: Fonts.regular,
-    fontSize: 11,
-    margin: 0,
+  helperError:      { color: colors.error },
+  errorIndicator: {
+    width: 8, height: 8,
+    borderRadius:    4,
+    backgroundColor: colors.error,
+  },
+});
+
+const otpStyles = StyleSheet.create({
+  row:  { flexDirection: 'row', gap: 8 },
+  cell: {
+    width:           44,
+    height:          52,
+    borderRadius:    radii.md,
+    borderWidth:     1.5,
+    borderColor:     colors.grey200,
+    fontSize:        typography.size['2xl'],
+    fontFamily:      typography.fontFamily.bold,
+    color:           colors.grey800,
+    backgroundColor: colors.white,
+  },
+  cellActive: {
+    borderColor:   colors.primary,
+    shadowColor:   colors.primary,
+    shadowOffset:  { width: 0, height: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius:  6,
+    elevation:     3,
   },
 });

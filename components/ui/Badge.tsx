@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { typography } from '@/constants/tokens';
 import { 
   G100, 
   G600, 
@@ -11,7 +12,6 @@ import {
   ERROR, 
   WARNING_LIGHT, 
   WARNING,
-  Fonts 
 } from '@/constants/theme';
 
 export type BadgeVariant = 'default' | 'primary' | 'success' | 'error' | 'warning';
@@ -57,9 +57,8 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   text: {
-    fontSize: 11,
-    fontFamily: Fonts.bold,
+    fontSize: typography.size.xs,
+    fontFamily: typography.fontFamily.bold,
     letterSpacing: 0.2,
-    fontWeight: '700',
   },
 });

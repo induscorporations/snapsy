@@ -15,11 +15,14 @@ import * as Notifications from 'expo-notifications';
 
 import { useUIStore } from '@/stores/useUIStore';
 import { useAuthStore } from '@/stores/useAuthStore';
-import { Colors, SPACING, RADIUS, PRIMARY, BACKGROUND_DARK, G400, G800 } from '@/constants/theme';
-import { Button } from '@/components/ui/Button';
+import { colors, spacing, radii, iconSize } from '@/constants/tokens';
+import { Button } from '@/components';
 import { ThemedText } from '@/components/ui/Typography';
-import { Icon, IconName } from '@/components/ui/Icon';
+import { Camera, Zap, Shield, Bell, User } from 'lucide-react-native';
 import { SelfiePicker } from '@/components/selfie-picker';
+
+const SLIDE_ICON_MAP = { camera: Camera, zap: Zap, shield: Shield, bell: Bell, user: User } as const;
+type IconName = keyof typeof SLIDE_ICON_MAP;
 
 const { width, height } = Dimensions.get('window');
 
@@ -120,15 +123,18 @@ export default function OnboardingScreen() {
         style={styles.illustrationContainer}
       >
         <View style={styles.iconCircle}>
-          <Icon name={item.icon} size={48} color={PRIMARY} solid />
+          {(() => {
+            const IconComponent = SLIDE_ICON_MAP[item.icon];
+            return <IconComponent size={iconSize['4xl']} strokeWidth={0} fill={colors.primary} color={colors.primary} />;
+          })()}
         </View>
       </Animated.View>
       
       <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.content}>
-        <ThemedText type="largeTitle" darkColor="#FFFFFF" style={styles.title}>
+        <ThemedText type="largeTitle" darkColor={colors.white} style={styles.title}>
           {item.title}
         </ThemedText>
-        <ThemedText type="body1" darkColor={G400} style={styles.body}>
+        <ThemedText type="body1" darkColor={colors.grey400} style={styles.body}>
           {item.body}
         </ThemedText>
 
@@ -187,12 +193,12 @@ export default function OnboardingScreen() {
               size="lg"
               fullWidth
               onPress={requestNotifications}
-              iconR="bell"
+              iconRight={<Bell size={iconSize.md} strokeWidth={0} fill={colors.grey900} color={colors.grey900} />}
             >
               Enable Notifications
             </Button>
           ) : currentSlide.type === 'selfie' ? (
-            <ThemedText type="caption" darkColor={G400} style={styles.selfieNotice}>
+            <ThemedText type="caption" darkColor={colors.grey400} style={styles.selfieNotice}>
               Selfie is mandatory to find you in photos.
             </ThemedText>
           ) : (
@@ -214,11 +220,11 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: BACKGROUND_DARK,
+    backgroundColor: colors.darkBg,
   },
   slide: {
     flex: 1,
-    paddingHorizontal: SPACING.xl,
+    paddingHorizontal: spacing[8],
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -231,56 +237,56 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: 'rgba(108, 240, 115, 0.1)',
+    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(108, 240, 115, 0.2)',
+    borderColor: colors.primaryMid,
   },
   content: {
     alignItems: 'center',
-    marginTop: SPACING.xl,
+    marginTop: spacing[8],
     paddingBottom: 100,
   },
   title: {
     textAlign: 'center',
-    marginBottom: SPACING.md,
+    marginBottom: spacing[4],
   },
   body: {
     textAlign: 'center',
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: spacing[4],
   },
   selfieContainer: {
     width: '100%',
-    marginTop: SPACING.xl,
+    marginTop: spacing[8],
   },
   selfieNotice: {
     textAlign: 'center',
-    paddingTop: SPACING.md,
+    paddingTop: spacing[4],
   },
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.xxl,
-    backgroundColor: BACKGROUND_DARK,
+    paddingHorizontal: spacing[6],
+    paddingBottom: spacing[12],
+    backgroundColor: colors.darkBg,
   },
   dots: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
-    marginBottom: SPACING.xl,
+    gap: spacing[2],
+    marginBottom: spacing[8],
   },
   dot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: radii.xs,
+    backgroundColor: colors.darkSurface2,
   },
   dotActive: {
-    backgroundColor: PRIMARY,
+    backgroundColor: colors.primary,
     width: 20,
   },
   buttonRow: {

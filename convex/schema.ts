@@ -5,6 +5,7 @@ export default defineSchema({
   users: defineTable({
     clerkId: v.string(),
     createdAt: v.number(),
+    pushToken: v.optional(v.string()),
   }).index('by_clerk_id', ['clerkId']),
 
   events: defineTable({

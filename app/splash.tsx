@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors, Fonts } from '@/constants/theme';
+import { colors, spacing, typography } from '@/constants/tokens';
 
 export default function SplashScreenRoute() {
   return (
@@ -13,20 +13,20 @@ export default function SplashScreenRoute() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.dark.background,
+    backgroundColor: colors.darkBg,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    padding: spacing[6],
   },
   logo: {
-    fontFamily: Fonts.bold,
-    fontSize: 36,
-    color: Colors.light.primary,
-    marginBottom: 8,
+    fontFamily: typography.fontFamily.bold,
+    fontSize: typography.size['4xl'],
+    color: colors.primary,
+    marginBottom: spacing[2],
   },
   tagline: {
-    fontFamily: Fonts.regular,
-    fontSize: 16,
-    color: Colors.dark.textSecondary,
+    fontFamily: typography.fontFamily.regular,
+    fontSize: typography.size.lg,
+    color: colors.grey400,
   },
 });

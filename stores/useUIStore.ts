@@ -10,6 +10,8 @@ type UIStore = {
   setHasCompletedOnboarding: (v: boolean) => void;
   onboardingHydrated: boolean;
   hydrateOnboarding: () => Promise<void>;
+  uploadSuccessSnackbar: boolean;
+  setUploadSuccessSnackbar: (v: boolean) => void;
 };
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -29,4 +31,6 @@ export const useUIStore = create<UIStore>((set) => ({
       set({ onboardingHydrated: true });
     }
   },
+  uploadSuccessSnackbar: false,
+  setUploadSuccessSnackbar: (v: boolean) => set({ uploadSuccessSnackbar: v }),
 }));

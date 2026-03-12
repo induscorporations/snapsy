@@ -4,17 +4,16 @@ import { useState } from 'react';
 import { Alert, StyleSheet } from 'react-native';
 
 import { AuthLayout } from '@/components/auth-layout';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { Button, Input } from '@/components';
 import { ThemedText } from '@/components/ui/Typography';
-import { Colors, SPACING } from '@/constants/theme';
+import { colors, spacing, typography } from '@/constants/tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function ResetPasswordScreen() {
     const router = useRouter();
     const { signIn, setActive, isLoaded } = useSignIn();
     const colorScheme = useColorScheme() ?? 'light';
-    const theme = Colors[colorScheme];
+    const theme = { error: colors.error };
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -142,10 +141,10 @@ export default function ResetPasswordScreen() {
 
 const styles = StyleSheet.create({
     button: {
-        marginTop: SPACING.xl,
+        marginTop: spacing[8],
     },
     error: {
-        marginTop: SPACING.sm,
-        fontSize: 14,
+        marginTop: spacing[3],
+        fontSize: typography.size.base,
     },
 });

@@ -1,5 +1,6 @@
 import { StyleSheet, Text, type TextProps } from 'react-native';
 
+import { typography } from '@/constants/tokens';
 import { Fonts } from '@/constants/theme';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
@@ -53,50 +54,50 @@ export function ThemedText({
 
 const styles = StyleSheet.create({
   largeTitle: {
-    fontSize: 34,
+    fontSize: typography.size['5xl'],
     fontFamily: Fonts.bold,
     lineHeight: 41,
     letterSpacing: -0.4,
   },
   title1: {
-    fontSize: 28,
+    fontSize: typography.size['4xl'],
     fontFamily: Fonts.bold,
     lineHeight: 34,
     letterSpacing: -0.3,
   },
   title2: {
-    fontSize: 22,
+    fontSize: typography.size['2xl'],
     fontFamily: Fonts.bold,
     lineHeight: 28,
     letterSpacing: -0.2,
   },
   title3: {
-    fontSize: 20,
+    fontSize: typography.size['2xl'],
     fontFamily: Fonts.bold,
     lineHeight: 25,
   },
   headline: {
-    fontSize: 17,
+    fontSize: typography.size.xl,
     fontFamily: Fonts.bold,
     lineHeight: 22,
   },
   body1: {
-    fontSize: 16,
+    fontSize: typography.size.lg,
     fontFamily: Fonts.regular,
     lineHeight: 24,
   },
   body2: {
-    fontSize: 14,
+    fontSize: typography.size.base,
     fontFamily: Fonts.regular,
     lineHeight: 20,
   },
   caption: {
-    fontSize: 12,
+    fontSize: typography.size.sm,
     fontFamily: Fonts.medium,
     lineHeight: 16,
   },
   small: {
-    fontSize: 11,
+    fontSize: typography.size.xs,
     fontFamily: Fonts.medium,
     lineHeight: 13,
   },

@@ -4,18 +4,23 @@ import { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { AuthLayout } from '@/components/auth-layout';
+import { ExternalLink } from '@/components/external-link';
 import { SocialAuthButtons } from '@/components/social-auth-buttons';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { Button, Input } from '@/components';
 import { ThemedText } from '@/components/ui/Typography';
-import { Colors, SPACING } from '@/constants/theme';
+import { colors, spacing, typography } from '@/constants/tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function SignUpScreen() {
   const router = useRouter();
   const { signUp, setActive, isLoaded } = useSignUp();
   const colorScheme = useColorScheme() ?? 'light';
-  const theme = Colors[colorScheme];
+  const theme = {
+    error: colors.error,
+    border: colorScheme === 'dark' ? colors.darkBorder : colors.grey200,
+    textSecondary: colors.grey400,
+    primary: colors.primary,
+  };
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -149,6 +154,13 @@ export default function SignUpScreen() {
         <ThemedText style={[styles.error, { color: theme.error }]}>{error}</ThemedText>
       ) : null}
 
+      <Text style={[styles.terms, { marginBottom: spacing[4] }]}>
+        By continuing you agree to our{' '}
+        <ExternalLink href="https://snapsy.app/terms">Terms of Service</ExternalLink>
+        {' '}and{' '}
+        <ExternalLink href="https://snapsy.app/privacy">Privacy Policy</ExternalLink>
+      </Text>
+
       <Button
         style={styles.button}
         onPress={onSignUp}
@@ -161,17 +173,17 @@ export default function SignUpScreen() {
       {/* Divider */}
       <View style={styles.divider}>
         <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
-        <ThemedText style={{ color: theme.textSecondary, fontSize: 12 }}>Or login with</ThemedText>
+        <ThemedText style={[styles.dividerText, { color: theme.textSecondary }]}>Or login with</ThemedText>
         <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
       </View>
 
       <SocialAuthButtons onSuccess={() => router.replace('/(tabs)')} disabled={loading} />
 
-      <View style={{ marginTop: SPACING.xxl, alignItems: 'center' }}>
+      <View style={styles.footer}>
         <Link href="/(auth)/sign-in" asChild>
           <TouchableOpacity>
             <ThemedText style={{ color: theme.textSecondary }}>
-              I have an account? <Text style={{ color: theme.primary, fontWeight: 'bold' }}>Log in</Text>
+              I have an account? <Text style={[styles.footerAccent, { color: theme.primary }]}>Log in</Text>
             </ThemedText>
           </TouchableOpacity>
         </Link>
@@ -181,29 +193,45 @@ export default function SignUpScreen() {
 }
 
 const styles = StyleSheet.create({
+  terms: {
+    fontSize: typography.size.xs,
+    color: colors.grey400,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
   error: {
-    marginBottom: SPACING.md,
-    fontSize: 14,
+    marginBottom: spacing[4],
+    fontSize: typography.size.base,
   },
   button: {
-    marginTop: SPACING.lg,
+    marginTop: spacing[6],
   },
   link: {
-    marginTop: SPACING.lg,
+    marginTop: spacing[6],
     alignSelf: 'center',
   },
   linkText: {
-    fontSize: 14,
+    fontSize: typography.size.base,
     textDecorationLine: 'underline',
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: SPACING.xl,
-    gap: SPACING.md,
+    marginTop: spacing[8],
+    gap: spacing[4],
   },
   dividerLine: {
     flex: 1,
     height: 1,
+  },
+  dividerText: {
+    fontSize: typography.size.sm,
+  },
+  footer: {
+    marginTop: spacing[12],
+    alignItems: 'center',
+  },
+  footerAccent: {
+    fontFamily: typography.fontFamily.bold,
   },
 });

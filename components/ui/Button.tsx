@@ -1,168 +1,128 @@
-import React, { useState } from 'react';
+// components/ui/Button.tsx
+import React from 'react';
 import {
-  ActivityIndicator,
-  Platform,
-  StyleSheet,
+  TouchableOpacity,
   Text,
-  TextStyle,
-  ViewStyle,
+  ActivityIndicator,
+  StyleSheet,
   View,
+  type TouchableOpacityProps,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+} from 'react-native-reanimated';
+import { colors, radii, typography, shadows, TAP_TARGET } from '@/constants/tokens';
 
-import { PressableScale } from '@/components/pressable-scale';
-import { 
-  Colors, 
-  Fonts, 
-  RADIUS, 
-  SPACING, 
-  PRIMARY, 
-  G900, 
-  PRIMARY_DARK, 
-  PRIMARY_LIGHT, 
-  G200, 
-  G700, 
-  ERROR, 
-  ERROR_LIGHT 
-} from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Icon, IconName } from './Icon';
-import { Spinner } from './Spinner';
-
+// ─── TYPES ───────────────────────────────────────────────────────────────────
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive';
-export type ButtonSize = 'sm' | 'md' | 'lg';
+export type ButtonSize    = 'sm' | 'md' | 'lg';
 
-interface ButtonProps {
-  onPress?: () => void;
-  children?: React.ReactNode;
-  variant?: ButtonVariant;
-  size?: ButtonSize;
-  disabled?: boolean;
-  loading?: boolean;
+export interface ButtonProps extends Omit<TouchableOpacityProps, 'style'> {
+  variant?:   ButtonVariant;
+  size?:      ButtonSize;
+  iconLeft?:  React.ReactNode;
+  iconRight?: React.ReactNode;
+  iconOnly?:  React.ReactNode;
+  loading?:   boolean;
   fullWidth?: boolean;
-  iconL?: IconName;
-  iconR?: IconName;
-  iconOnly?: IconName;
-  style?: ViewStyle;
-  textStyle?: TextStyle;
+  children?:  React.ReactNode;
 }
 
+// ─── CONFIG ──────────────────────────────────────────────────────────────────
+const SIZE_CONFIG = {
+  sm: { height: 36,        paddingH: 16, fontSize: typography.size.sm,   iconSize: 14 },
+  md: { height: TAP_TARGET, paddingH: 20, fontSize: typography.size.base, iconSize: 16 },
+  lg: { height: 52,        paddingH: 24, fontSize: typography.size.lg,   iconSize: 18 },
+};
+
+const VARIANT_CONFIG = {
+  primary:     { bg: colors.primary,      text: colors.grey900,    border: 'transparent' },
+  secondary:   { bg: colors.primaryLight, text: colors.primaryDark, border: 'transparent' },
+  ghost:       { bg: 'transparent',       text: colors.grey700,    border: colors.grey200 },
+  destructive: { bg: colors.errorLight,   text: colors.error,      border: 'transparent' },
+};
+
+// ─── COMPONENT ───────────────────────────────────────────────────────────────
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+
 export function Button({
-  onPress,
-  children,
-  variant = 'primary',
-  size = 'md',
-  disabled = false,
-  loading = false,
-  fullWidth = false,
-  iconL,
-  iconR,
+  variant   = 'primary',
+  size      = 'md',
+  iconLeft,
+  iconRight,
   iconOnly,
-  style,
-  textStyle,
+  loading   = false,
+  fullWidth = false,
+  disabled  = false,
+  children,
+  onPress,
+  ...rest
 }: ButtonProps) {
-  const colorScheme = useColorScheme() ?? 'light';
-  const theme = Colors[colorScheme];
+  const scale      = useSharedValue(1);
+  const sizeCfg    = SIZE_CONFIG[size];
+  const variantCfg = VARIANT_CONFIG[variant];
+  const isIconOnly = !!iconOnly && !children;
 
-  const handlePress = () => {
-    if (disabled || loading || !onPress) return;
-    if (Platform.OS !== 'web') {
-      Haptics.selectionAsync();
-    }
-    onPress();
-  };
-
-  const getVariantStyles = () => {
-    switch (variant) {
-      case 'primary':
-        return {
-          backgroundColor: PRIMARY,
-          color: G900,
-          borderWidth: 0,
-        };
-      case 'secondary':
-        return {
-          backgroundColor: PRIMARY_LIGHT,
-          color: PRIMARY_DARK,
-          borderWidth: 0,
-        };
-      case 'ghost':
-        return {
-          backgroundColor: 'transparent',
-          color: G700,
-          borderWidth: 1.5,
-          borderColor: G200,
-        };
-      case 'destructive':
-        return {
-          backgroundColor: ERROR_LIGHT,
-          color: ERROR,
-          borderWidth: 0,
-        };
-    }
-  };
-
-  const vStyles = getVariantStyles();
-
-  const h = { sm: 36, md: 44, lg: 52 }[size];
-  const fs = { sm: 12, md: 14, lg: 16 }[size];
-  const iconSz = { sm: 14, md: 16, lg: 18 }[size];
-  const pad = iconOnly && !children ? 0 : { sm: 16, md: 20, lg: 24 }[size];
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
   return (
-    <PressableScale
-      onPress={handlePress}
+    <AnimatedTouchable
+      onPress={onPress}
+      onPressIn={() => { scale.value = withTiming(0.97, { duration: 80 }); }}
+      onPressOut={() => { scale.value = withTiming(1, { duration: 120 }); }}
       disabled={disabled || loading}
+      activeOpacity={1}
       style={[
-        styles.container,
+        styles.base,
+        animStyle,
         {
-          height: h,
-          paddingHorizontal: pad,
-          width: iconOnly && !children ? h : fullWidth ? '100%' : undefined,
-          backgroundColor: vStyles.backgroundColor,
-          borderWidth: vStyles.borderWidth,
-          borderColor: vStyles.borderColor as any,
-          opacity: disabled ? 0.4 : 1,
+          height:            sizeCfg.height,
+          paddingHorizontal: isIconOnly ? 0 : sizeCfg.paddingH,
+          width:             isIconOnly ? sizeCfg.height : fullWidth ? '100%' : undefined,
+          backgroundColor:   variantCfg.bg,
+          borderColor:       variantCfg.border,
+          borderWidth:       variant === 'ghost' ? 1.5 : 0,
+          opacity:           disabled ? 0.4 : 1,
         },
-        style as any,
+        variant === 'primary' && !disabled && shadows.primarySm,
       ]}
+      {...rest}
     >
       {loading ? (
-        <Spinner size={iconSz} color={vStyles.color} />
+        <ActivityIndicator size="small" color={variantCfg.text} />
       ) : (
         <>
-          {iconL && <Icon name={iconL} size={iconSz} color={vStyles.color} style={{ marginRight: 8 }} />}
-          {iconOnly && !children && <Icon name={iconOnly} size={iconSz} color={vStyles.color} />}
+          {iconLeft  && <View style={styles.iconLeft}>{iconLeft}</View>}
+          {isIconOnly && iconOnly}
           {children && (
-            <Text
-              style={[
-                styles.text,
-                {
-                  color: vStyles.color,
-                  fontSize: fs,
-                },
-                textStyle,
-              ]}
-            >
+            <Text style={[styles.label, { fontSize: sizeCfg.fontSize, color: variantCfg.text }]}>
               {children}
             </Text>
           )}
-          {iconR && <Icon name={iconR} size={iconSz} color={vStyles.color} style={{ marginLeft: 8 }} />}
+          {iconRight && <View style={styles.iconRight}>{iconRight}</View>}
         </>
       )}
-    </PressableScale>
+    </AnimatedTouchable>
   );
 }
 
+// ─── STYLES ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  base: {
+    flexDirection:  'row',
+    alignItems:     'center',
     justifyContent: 'center',
-    borderRadius: RADIUS.full,
+    borderRadius:   radii.full,
+    overflow:       'hidden',
   },
-  text: {
-    fontFamily: Fonts.bold,
-    textAlign: 'center',
+  label: {
+    fontFamily:         typography.fontFamily.semibold,
+    includeFontPadding: false,
   },
+  iconLeft:  { marginRight: 8 },
+  iconRight: { marginLeft: 8 },
 });

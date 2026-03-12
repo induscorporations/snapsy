@@ -6,10 +6,10 @@ import { useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 
 import { useAuthStore } from '@/stores/useAuthStore';
-import { BACKGROUND_DARK, G400, PRIMARY } from '@/constants/theme';
+import { colors, spacing, typography } from '@/constants/tokens';
 import { Spinner } from '@/components/ui/Spinner';
 import { ThemedText } from '@/components/ui/Typography';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components';
 
 export default function JoinEventScreen() {
   const { eventId } = useLocalSearchParams<{ eventId?: string }>();
@@ -56,22 +56,22 @@ export default function JoinEventScreen() {
       <StatusBar barStyle="light-content" />
       {status === 'error' ? (
         <View style={styles.content}>
-          <ThemedText type="title3" darkColor="#FFFFFF" style={styles.title}>Couldn't join event</ThemedText>
-          <ThemedText type="body2" darkColor={G400} style={styles.text}>
+          <ThemedText type="title3" darkColor={colors.white} style={styles.title}>Couldn't join event</ThemedText>
+          <ThemedText type="body2" darkColor={colors.grey400} style={styles.text}>
             The invite link may be invalid or expired.
           </ThemedText>
           <Button 
             onPress={() => router.replace('/(tabs)')}
             variant="primary"
-            style={{ marginTop: 24 }}
+            style={styles.backButton}
           >
             Back to Home
           </Button>
         </View>
       ) : (
         <View style={styles.content}>
-          <Spinner size={32} color={PRIMARY} />
-          <ThemedText type="body2" darkColor={G400} style={styles.statusText}>
+          <Spinner size={32} color={colors.primary} />
+          <ThemedText type="body2" darkColor={colors.grey400} style={styles.statusText}>
             {status === 'joined' ? 'Taking you to the event…' : 'Joining event…'}
           </ThemedText>
         </View>
@@ -83,22 +83,25 @@ export default function JoinEventScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: BACKGROUND_DARK,
+    backgroundColor: colors.darkBg,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    padding: spacing[6],
   },
   content: {
     alignItems: 'center',
     width: '100%',
   },
   title: {
-    marginBottom: 12,
+    marginBottom: spacing[3],
   },
   text: {
     textAlign: 'center',
   },
   statusText: {
-    marginTop: 24,
+    marginTop: spacing[6],
+  },
+  backButton: {
+    marginTop: spacing[6],
   },
 });

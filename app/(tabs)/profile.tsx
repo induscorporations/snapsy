@@ -3,29 +3,25 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  Alert,
-  ActivityIndicator,
   StatusBar,
 } from 'react-native';
 import { useClerk } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
+import { User, CheckCircle, LogOut, Settings } from 'lucide-react-native';
 
 import { useAuthStore } from '@/stores/useAuthStore';
 import { SelfiePicker } from '@/components/selfie-picker';
-import { PressableScale } from '@/components/pressable-scale';
-import { Colors, SPACING, RADIUS, PRIMARY, BACKGROUND_DARK, G400, G700, G800 } from '@/constants/theme';
-import { Button } from '@/components/ui/Button';
+import { colors, spacing, radii, typography, iconSize } from '@/constants/tokens';
+import { Button, Card } from '@/components';
 import { ThemedText } from '@/components/ui/Typography';
-import { Icon } from '@/components/ui/Icon';
-import { Card } from '@/components/ui/Card';
+import { ListItem } from '@/components/ui/Card';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { signOut } = useClerk();
   const convexUserId = useAuthStore((s) => s.convexUserId);
-  const [deleting, setDeleting] = useState(false);
   const faces = useQuery(
     api.faces.listByUser,
     convexUserId ? { userId: convexUserId as any } : 'skip'
@@ -39,33 +35,6 @@ export default function ProfileScreen() {
     router.replace('/(auth)/sign-in');
   };
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete account',
-      'This will permanently delete your Snapsy data (faces, event memberships, photo matches). You will be signed out. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete my data',
-          style: 'destructive',
-          onPress: async () => {
-            setDeleting(true);
-            try {
-              await deleteMyAccount({ userId: convexUserId as any });
-              await signOut();
-              useAuthStore.getState().setConvexUserId(null);
-              router.replace('/(auth)/sign-in');
-            } catch (e) {
-              Alert.alert('Error', e instanceof Error ? e.message : 'Could not delete account.');
-            } finally {
-              setDeleting(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
   return (
     <View style={styles.outerContainer}>
       <StatusBar barStyle="light-content" />
@@ -75,21 +44,25 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <ThemedText type="largeTitle" darkColor="#FFFFFF">Profile</ThemedText>
-          <ThemedText type="body2" darkColor={G400}>Manage your face & account</ThemedText>
+          <ThemedText type="largeTitle" darkColor={colors.white}>Profile</ThemedText>
+          <ThemedText type="body2" darkColor={colors.grey400}>Manage your face & account</ThemedText>
         </View>
 
         <View style={styles.section}>
-          <ThemedText type="small" darkColor={G400} style={styles.sectionLabel}>FACE PROFILE</ThemedText>
+          <ThemedText type="small" darkColor={colors.grey400} style={styles.sectionLabel}>FACE PROFILE</ThemedText>
           <Card variant="bordered" style={styles.faceCard}>
             <View style={styles.faceIcon}>
-              <Icon name={hasSelfie ? "checkCircle" : "user"} size={32} color={hasSelfie ? PRIMARY : G400} solid={hasSelfie} />
+              {hasSelfie ? (
+                <CheckCircle size={iconSize['3xl']} strokeWidth={0} fill={colors.primaryDark} color={colors.primaryDark} />
+              ) : (
+                <User size={iconSize['3xl']} strokeWidth={1.75} color={colors.grey400} />
+              )}
             </View>
             <View style={styles.faceInfo}>
-              <ThemedText type="headline" darkColor="#FFFFFF">
+              <ThemedText type="headline" darkColor={colors.white}>
                 {hasSelfie ? 'Biometric set' : 'No selfie'}
               </ThemedText>
-              <ThemedText type="caption" darkColor={G400}>
+              <ThemedText type="caption" darkColor={colors.grey400}>
                 {hasSelfie 
                   ? 'Your on-device matching profile is active.' 
                   : 'Add a selfie to find your photos automatically.'}
@@ -105,28 +78,26 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <ThemedText type="small" darkColor={G400} style={styles.sectionLabel}>ACCOUNT</ThemedText>
+          <ThemedText type="small" darkColor={colors.grey400} style={styles.sectionLabel}>ACCOUNT</ThemedText>
           <View style={styles.actions}>
             <Button 
               variant="ghost" 
               size="lg" 
               fullWidth 
               onPress={handleSignOut}
-              iconL="arrowRight"
+              iconRight={<LogOut size={iconSize.md} strokeWidth={1.75} color={colors.grey700} />}
             >
               Sign out
             </Button>
-            
-            <Button 
-              variant="ghost" 
-              size="md" 
-              onPress={handleDeleteAccount}
-              loading={deleting}
-              disabled={deleting}
-              style={styles.deleteBtn}
-            >
-              <ThemedText type="caption" darkColor="#FF4B4B">Delete account data</ThemedText>
-            </Button>
+
+            <Card variant="flat" padding={spacing[5]} style={styles.settingsCard}>
+              <ListItem
+                icon={() => <Settings size={iconSize.md} strokeWidth={1.75} color={colors.grey700} />}
+                title="Settings"
+                trailing={<Settings size={iconSize.sm} strokeWidth={1.75} color={colors.grey400} />}
+                onPress={() => router.push('/settings')}
+              />
+            </Card>
           </View>
         </View>
       </ScrollView>
@@ -137,54 +108,54 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   outerContainer: {
     flex: 1,
-    backgroundColor: BACKGROUND_DARK,
+    backgroundColor: colors.darkBg,
   },
   container: {
     flex: 1,
   },
   content: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: spacing[6],
     paddingTop: 80,
     paddingBottom: 100,
   },
   header: {
-    marginBottom: SPACING.xl,
+    marginBottom: spacing[8],
   },
   section: {
     marginBottom: 40,
   },
   sectionLabel: {
     letterSpacing: 1.2,
-    fontWeight: '700',
-    marginBottom: 16,
+    fontFamily: typography.fontFamily.bold,
+    marginBottom: spacing[4],
   },
   faceCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderColor: 'rgba(255,255,255,0.05)',
+    padding: spacing[5],
+    backgroundColor: colors.darkSurface2,
+    borderColor: colors.darkBorder,
   },
   faceIcon: {
     width: 64,
     height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: radii['3xl'],
+    backgroundColor: colors.darkSurface2,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: spacing[4],
   },
   faceInfo: {
     flex: 1,
   },
   facePickerContainer: {
-    marginTop: 16,
+    marginTop: spacing[4],
   },
   actions: {
-    gap: 16,
+    gap: spacing[4],
     alignItems: 'center',
   },
-  deleteBtn: {
-    marginTop: 8,
+  settingsCard: {
+    alignSelf: 'stretch',
   },
 });

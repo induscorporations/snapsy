@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { colors, typography } from '@/constants/tokens';
 import { 
   PRIMARY, 
   G200, 
   G900, 
   G400, 
   G700, 
-  Fonts,
   PRIMARY_DARK
 } from '@/constants/theme';
 import { Icon, IconName } from './Icon';
@@ -57,7 +57,7 @@ export function Toggle({ label, defaultOn = false, icon, onValueChange }: Toggle
             styles.thumb, 
             { 
               transform: [{ translateX }],
-              backgroundColor: on ? G900 : '#FFFFFF'
+              backgroundColor: on ? G900 : colors.white
             }
           ]} 
         />
@@ -78,10 +78,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   label: {
-    fontSize: 14,
-    fontFamily: Fonts.medium,
+    fontSize: typography.size.base,
+    fontFamily: typography.fontFamily.medium,
     color: G700,
-    fontWeight: '500',
   },
   track: {
     width: 48,

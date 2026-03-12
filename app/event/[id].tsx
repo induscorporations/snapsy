@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,25 +7,44 @@ import {
   useWindowDimensions,
   StatusBar,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import { Image as ExpoImage } from 'expo-image';
 
 import { useAuthStore } from '@/stores/useAuthStore';
+import { useUIStore } from '@/stores/useUIStore';
+import { Snackbar, EmptyState } from '@/components/feedback/Feedback';
+import { BottomSheet } from '@/components/navigation/Navigation';
 import { UploadPhotosButton } from '@/components/upload-photos-button';
-import { Colors, SPACING, RADIUS, BACKGROUND_DARK, G400, PRIMARY, G800, G700 } from '@/constants/theme';
+import { colors, spacing, radii, typography } from '@/constants/tokens';
 import { ThemedText } from '@/components/ui/Typography';
-import { Icon } from '@/components/ui/Icon';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components';
+import {
+  ArrowLeft,
+  User,
+  Image,
+  CheckCircle,
+  Shield,
+  UserMinus,
+  Clock,
+  ShieldOff,
+} from 'lucide-react-native';
 
 export default function EventScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const convexUserId = useAuthStore((s) => s.convexUserId);
   const [tab, setTab] = useState<'my' | 'all' | 'members'>('my');
+  const [refreshing, setRefreshing] = useState(false);
+  const uploadSuccessSnackbar = useUIStore((s) => s.uploadSuccessSnackbar);
+  const setUploadSuccessSnackbar = useUIStore((s) => s.setUploadSuccessSnackbar);
+  const [showUploadSnackbar, setShowUploadSnackbar] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<any | null>(null);
 
   const event = useQuery(
     api.events.get,
@@ -48,10 +67,34 @@ export default function EventScreen() {
   const updateRole = useMutation((api as any).eventMembers.updateRole);
 
   const isHost = event?.hostId === convexUserId;
+  const memberCount = (event as any)?.memberCount ?? members?.length ?? 0;
+  const daysSinceCreation =
+    event ? Math.floor((Date.now() - event.createdAt) / (24 * 60 * 60 * 1000)) : 0;
+  const daysLeft = event
+    ? Math.max(0, event.retentionDays - daysSinceCreation)
+    : 0;
+  const isExpired = daysLeft <= 0;
   const photos =
     tab === 'my' && myPhotosWithUrls
       ? myPhotosWithUrls
       : (allPhotos ?? []);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    // Convex queries auto-update reactively, but we add a small delay
+    // to give visual feedback for the pull-to-refresh interaction.
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    setRefreshing(false);
+  }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (uploadSuccessSnackbar) {
+        setShowUploadSnackbar(true);
+        setUploadSuccessSnackbar(false);
+      }
+    }, [uploadSuccessSnackbar, setUploadSuccessSnackbar])
+  );
 
   const handleRemoveMember = async (membershipId: string) => {
     if (!convexUserId) return;
@@ -77,33 +120,71 @@ export default function EventScreen() {
   };
 
   const { width } = useWindowDimensions();
-  const size = (width - SPACING.lg * 2 - SPACING.xs * 2) / 3;
+  const size = (width - spacing[6] * 2 - spacing[2] * 2) / 3;
 
   if (!id) return null;
   if (event === undefined) return <View style={styles.placeholder} />;
   if (!event) {
-    router.replace('/(tabs)');
-    return null;
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <EmptyState
+          icon={
+            <ShieldOff
+              size={32}
+              color={colors.grey400}
+              fill={colors.grey400}
+              strokeWidth={0}
+            />
+          }
+          title="Access Denied"
+          subtitle="You're not a member of this event."
+          cta={
+            <Button variant="ghost" onPress={() => router.back()}>
+              Go Back
+            </Button>
+          }
+        />
+      </View>
+    );
   }
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.back} activeOpacity={0.7}>
-          <Icon name="arrowLeft" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        
+        <Button
+          variant="ghost"
+          size="md"
+          onPress={() => router.back()}
+          iconOnly={<ArrowLeft size={24} strokeWidth={1.75} color={colors.white} />}
+          style={styles.back}
+        />
         <View style={styles.headerRow}>
           <View style={styles.titleContainer}>
-            <ThemedText type="title2" darkColor="#FFFFFF">{event.name}</ThemedText>
-            <ThemedText type="small" darkColor={G400}>{event.privacy} · {event.retentionDays}d left</ThemedText>
+            <ThemedText type="title2" darkColor={colors.white}>{event.name}</ThemedText>
+            <ThemedText type="small" darkColor={colors.grey400}>
+              {memberCount} member{memberCount !== 1 ? 's' : ''} · {daysLeft}d left
+            </ThemedText>
           </View>
-          {isHost && convexUserId && tab !== 'members' && (
+          {isHost && convexUserId && tab !== 'members' && !isExpired && (
             <UploadPhotosButton eventId={id} uploadedBy={convexUserId} />
           )}
         </View>
       </View>
+
+      {isExpired && (
+        <View style={styles.expiredBanner}>
+          <Clock size={16} color={colors.warning} strokeWidth={1.75} />
+          <ThemedText
+            type="caption"
+            darkColor={colors.warning}
+            style={styles.expiredText}
+          >
+            This event's photos have expired and been removed.
+          </ThemedText>
+        </View>
+      )}
 
       <View style={styles.tabsContainer}>
         <View style={styles.tabs}>
@@ -114,25 +195,27 @@ export default function EventScreen() {
           >
             <ThemedText 
               type="caption" 
-              darkColor={tab === 'my' ? G800 : G400} 
-              style={tab === 'my' && styles.tabTextActive}
+              darkColor={tab === 'my' ? colors.grey800 : colors.grey400} 
+              style={tab === 'my' ? styles.tabTextActive : undefined}
             >
               For You
             </ThemedText>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, tab === 'all' && styles.tabActive]}
-            onPress={() => setTab('all')}
-            activeOpacity={0.8}
-          >
-            <ThemedText 
-              type="caption" 
-              darkColor={tab === 'all' ? G800 : G400} 
-              style={tab === 'all' && styles.tabTextActive}
+          {isHost && (
+            <TouchableOpacity
+              style={[styles.tab, tab === 'all' && styles.tabActive]}
+              onPress={() => setTab('all')}
+              activeOpacity={0.8}
             >
-              All Activity
-            </ThemedText>
-          </TouchableOpacity>
+              <ThemedText 
+                type="caption" 
+                darkColor={tab === 'all' ? colors.grey800 : colors.grey400} 
+                style={tab === 'all' ? styles.tabTextActive : undefined}
+              >
+                All Activity
+              </ThemedText>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={[styles.tab, tab === 'members' && styles.tabActive]}
             onPress={() => setTab('members')}
@@ -140,8 +223,8 @@ export default function EventScreen() {
           >
             <ThemedText 
               type="caption" 
-              darkColor={tab === 'members' ? G800 : G400} 
-              style={tab === 'members' && styles.tabTextActive}
+              darkColor={tab === 'members' ? colors.grey800 : colors.grey400} 
+              style={tab === 'members' ? styles.tabTextActive : undefined}
             >
               Members
             </ThemedText>
@@ -155,39 +238,30 @@ export default function EventScreen() {
           keyExtractor={(item) => item._id}
           contentContainerStyle={styles.memberList}
           renderItem={({ item }) => (
-            <View style={styles.memberItem}>
+            <TouchableOpacity
+              style={styles.memberItem}
+              activeOpacity={0.8}
+              disabled={!isHost || item.userId === convexUserId}
+              onPress={() => {
+                if (isHost && item.userId !== convexUserId) {
+                  setSelectedMember(item);
+                }
+              }}
+            >
               <View style={styles.memberInfo}>
-                <ThemedText type="headline" darkColor="#FFFFFF">{item.userName}</ThemedText>
-                <ThemedText type="caption" darkColor={G400}>{item.role}</ThemedText>
+                <ThemedText type="headline" darkColor={colors.white}>{item.userName}</ThemedText>
+                <ThemedText type="caption" darkColor={colors.grey400}>{item.role}</ThemedText>
               </View>
-              {isHost && item.userId !== convexUserId && (
-                <View style={styles.memberActions}>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onPress={() => handleToggleRole(item)}
-                  >
-                    {item.role === 'host' ? 'Demote' : 'Promote'}
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onPress={() => handleRemoveMember(item._id)}
-                  >
-                    Remove
-                  </Button>
-                </View>
-              )}
-            </View>
+            </TouchableOpacity>
           )}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Icon name="user" size={48} color={G700} style={{ marginBottom: 16 }} />
-              <ThemedText type="body2" darkColor={G400}>No members yet.</ThemedText>
+              <User size={48} strokeWidth={1.75} color={colors.grey700} style={styles.emptyIcon} />
+              <ThemedText type="body2" darkColor={colors.grey400}>No members yet.</ThemedText>
             </View>
           }
         />
-      ) : (
+      ) : !isExpired ? (
         <FlatList
           data={photos}
           numColumns={3}
@@ -195,10 +269,18 @@ export default function EventScreen() {
           contentContainerStyle={styles.grid}
           columnWrapperStyle={styles.row}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+              colors={[colors.primary]}
+            />
+          }
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Icon name="image" size={48} color={G700} style={{ marginBottom: 16 }} />
-              <ThemedText type="body2" darkColor={G400}>No photos found yet.</ThemedText>
+              <Image size={48} strokeWidth={1.75} color={colors.grey700} style={styles.emptyIcon} />
+              <ThemedText type="body2" darkColor={colors.grey400}>No photos found yet.</ThemedText>
             </View>
           }
           renderItem={({ item, index }) => {
@@ -227,6 +309,79 @@ export default function EventScreen() {
             );
           }}
         />
+      ) : (
+        <View style={styles.expiredPlaceholder} />
+      )}
+
+      {showUploadSnackbar && (
+        <View style={styles.snackbarContainer}>
+          <Snackbar
+            type="success"
+            message="Photos uploaded successfully"
+            duration={3000}
+            onHide={() => setShowUploadSnackbar(false)}
+            iconLeft={
+              <CheckCircle
+                size={20}
+                strokeWidth={0}
+                fill={colors.primary}
+                color={colors.primary}
+              />
+            }
+          />
+        </View>
+      )}
+
+      {isHost && selectedMember && selectedMember.userId !== convexUserId && (
+        <BottomSheet
+          visible={!!selectedMember}
+          onClose={() => setSelectedMember(null)}
+          title={selectedMember.userName}
+          snapHeight={0.3}
+        >
+          <View style={styles.sheetList}>
+            <TouchableOpacity
+              style={styles.sheetItem}
+              onPress={async () => {
+                try {
+                  await handleToggleRole(selectedMember);
+                } finally {
+                  setSelectedMember(null);
+                }
+              }}
+            >
+              <Shield size={18} strokeWidth={1.75} color={colors.grey700} />
+              <ThemedText type="body1" darkColor={colors.grey800}>
+                {selectedMember.role === 'host' ? 'Remove Co-host' : 'Make Co-host'}
+              </ThemedText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.sheetItem}
+              onPress={async () => {
+                try {
+                  await handleRemoveMember(selectedMember._id);
+                } finally {
+                  setSelectedMember(null);
+                }
+              }}
+            >
+              <UserMinus size={18} strokeWidth={1.75} color={colors.error} />
+              <ThemedText type="body1" darkColor={colors.error}>
+                Remove from Event
+              </ThemedText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.sheetItem}
+              onPress={() => setSelectedMember(null)}
+            >
+              <ThemedText type="body1" darkColor={colors.grey700}>
+                Cancel
+              </ThemedText>
+            </TouchableOpacity>
+          </View>
+        </BottomSheet>
       )}
     </View>
   );
@@ -235,25 +390,24 @@ export default function EventScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: BACKGROUND_DARK,
+    backgroundColor: colors.darkBg,
   },
   placeholder: {
     flex: 1,
-    backgroundColor: BACKGROUND_DARK,
+    backgroundColor: colors.darkBg,
   },
   header: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: spacing[6],
     paddingTop: 60,
-    paddingBottom: SPACING.lg,
+    paddingBottom: spacing[6],
   },
   back: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: SPACING.md,
+    minWidth: 40,
+    marginBottom: spacing[4],
+    backgroundColor: colors.darkSurface2,
+    borderWidth: 0,
   },
   headerRow: {
     flexDirection: 'row',
@@ -262,45 +416,59 @@ const styles = StyleSheet.create({
   },
   titleContainer: {
     flex: 1,
-    marginRight: 12,
+    marginRight: spacing[3],
   },
   tabsContainer: {
-    paddingHorizontal: SPACING.lg,
-    marginBottom: SPACING.md,
+    paddingHorizontal: spacing[6],
+    marginBottom: spacing[4],
   },
   tabs: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    padding: 4,
-    borderRadius: 12,
+    backgroundColor: colors.darkSurface2,
+    padding: spacing[1],
+    borderRadius: radii.md,
   },
   tab: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: spacing[2.5],
     alignItems: 'center',
-    borderRadius: 8,
+    borderRadius: radii.sm,
   },
   tabActive: {
-    backgroundColor: PRIMARY,
+    backgroundColor: colors.primary,
   },
   tabTextActive: {
-    fontWeight: '700',
+    fontFamily: typography.fontFamily.bold,
+  },
+  expiredBanner: {
+    backgroundColor: colors.warningLight,
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[3],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  expiredText: {
+    color: colors.warning,
+    fontSize: typography.size.sm,
+    fontFamily: typography.fontFamily.medium,
+    flex: 1,
   },
   grid: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: spacing[6],
     paddingBottom: 40,
   },
   row: {
-    gap: 8,
-    marginBottom: 8,
+    gap: spacing[2],
+    marginBottom: spacing[2],
   },
   thumb: {
-    borderRadius: 12,
+    borderRadius: radii.md,
     overflow: 'hidden',
   },
   thumbInner: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: colors.darkSurface2,
   },
   thumbImage: {
     width: '100%',
@@ -309,28 +477,51 @@ const styles = StyleSheet.create({
   thumbPlaceholder: {
     width: '100%',
     height: '100%',
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: colors.darkSurface2,
   },
   emptyState: {
     alignItems: 'center',
     paddingVertical: 100,
   },
+  emptyIcon: {
+    marginBottom: spacing[4],
+  },
+  expiredPlaceholder: {
+    flex: 1,
+  },
   memberList: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: spacing[6],
     paddingBottom: 40,
   },
   memberItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: spacing[4],
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    borderBottomColor: colors.darkSurface2,
   },
   memberInfo: {
     flex: 1,
   },
   memberActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: spacing[2],
+  },
+  snackbarContainer: {
+    position: 'absolute',
+    left: spacing[6],
+    right: spacing[6],
+    bottom: spacing[6],
+    alignItems: 'center',
+  },
+  sheetList: {
+    paddingVertical: spacing[4],
+    gap: spacing[2],
+  },
+  sheetItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing[3],
+    gap: spacing[3],
   },
 });

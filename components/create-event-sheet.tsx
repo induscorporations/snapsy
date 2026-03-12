@@ -1,25 +1,24 @@
 import { api } from '@/convex/_generated/api';
-import BottomSheet, { BottomSheetScrollView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import { useMutation } from 'convex/react';
 import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   Share,
   StyleSheet,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Calendar, Check, Copy, Share2 } from 'lucide-react-native';
 
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { Button, Input, BottomSheet } from '@/components';
 import { ThemedText } from '@/components/ui/Typography';
-import { SPACING, RADIUS, BACKGROUND_DARK, G400, PRIMARY, G700, G800 } from '@/constants/theme';
-import { Icon } from '@/components/ui/Icon';
+import { colors, spacing, radii, typography, iconSize } from '@/constants/tokens';
 
 const RETENTION_OPTIONS = [7, 14, 30, 90];
 const PRIVACY_OPTIONS = ['invite_only', 'link_only'] as const;
@@ -34,22 +33,20 @@ export function CreateEventSheet({ open, onClose, convexUserId }: Props) {
   const router = useRouter();
 
   const [name, setName] = useState('');
+  const [date, setDate] = useState('');
   const [privacy, setPrivacy] = useState<'invite_only' | 'link_only'>('invite_only');
   const [retentionDays, setRetentionDays] = useState(30);
   const [createdEventId, setCreatedEventId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const createEvent = useMutation(api.events.create);
-  const sheetRef = useRef<BottomSheet>(null);
 
   useEffect(() => {
-    if (open) {
-      setError(null);
-      sheetRef.current?.expand?.();
-    } else {
-      sheetRef.current?.close?.();
+    if (!open) {
       setCreatedEventId(null);
+    } else {
+      setError(null);
     }
   }, [open]);
 
@@ -111,90 +108,90 @@ export function CreateEventSheet({ open, onClose, convexUserId }: Props) {
     }
   };
 
-  const renderBackdrop = useCallback(
-    (props: any) => (
-      <BottomSheetBackdrop
-        {...props}
-        appearsOnIndex={0}
-        disappearsOnIndex={-1}
-        opacity={0.7}
-      />
-    ),
-    []
-  );
-
   return (
     <BottomSheet
-      ref={sheetRef}
-      index={-1}
+      visible={open}
       onClose={onClose}
-      enablePanDownToClose
-      backdropComponent={renderBackdrop}
-      backgroundStyle={{ backgroundColor: BACKGROUND_DARK }}
-      handleIndicatorStyle={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-      snapPoints={['75%']}
+      title={createdEventId ? 'Event Created' : 'Create Event'}
+      snapHeight={0.75}
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboard}
       >
-        <BottomSheetScrollView contentContainerStyle={styles.content}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           {createdEventId ? (
             <View style={styles.successContainer}>
               <View style={styles.successIcon}>
-                <Icon name="check" size={32} color={PRIMARY} solid />
+                <Check size={32} strokeWidth={0} fill={colors.primary} color={colors.primary} />
               </View>
-              <ThemedText type="title2" darkColor="#FFFFFF" style={styles.title}>Event Created</ThemedText>
-              <ThemedText type="body2" darkColor={G400} style={styles.subtitle}>
+              <ThemedText type="body2" style={[styles.subtitle, { color: colors.grey600 }]}>
                 Your event is ready. Share the link below to invite guests.
               </ThemedText>
 
               <View style={styles.inviteBox}>
-                <ThemedText type="small" darkColor={G400} style={styles.inviteUrl} numberOfLines={1}>
+                <ThemedText type="small" style={[styles.inviteUrl, { color: colors.grey500 }]} numberOfLines={1}>
                   {inviteUrl}
                 </ThemedText>
                 <TouchableOpacity onPress={handleCopyLink} style={styles.copyButton}>
-                  <Icon name="copy" size={18} color={PRIMARY} />
+                  <Copy size={iconSize.md} strokeWidth={1.75} color={colors.primaryDark} />
                 </TouchableOpacity>
               </View>
 
               <View style={styles.buttonStack}>
-                <Button onPress={handleShare} variant="secondary" iconL="share" fullWidth>
+                <Button
+                  onPress={handleShare}
+                  variant="secondary"
+                  fullWidth
+                  iconLeft={<Share2 size={iconSize.md} strokeWidth={1.75} color={colors.primaryDark} />}
+                >
                   Share Invite
                 </Button>
-                <Button onPress={handleGoToEvent} variant="primary" fullWidth>
+                <Button onPress={handleGoToEvent} variant="primary" fullWidth size="lg">
                   Go to Event
                 </Button>
               </View>
             </View>
           ) : (
             <>
-              <ThemedText type="title2" darkColor="#FFFFFF" style={styles.title}>New Event</ThemedText>
-
               <Input
-                label="Event Name"
+                label="Event name"
                 placeholder="e.g. Summer Wedding"
                 value={name}
                 onChangeText={setName}
               />
 
+              <Input
+                label="Date"
+                placeholder="Select date"
+                value={date}
+                onChangeText={setDate}
+                iconLeft={<Calendar size={iconSize.sm} strokeWidth={1.75} color={colors.grey500} />}
+              />
+
               <View style={styles.formSection}>
-                <ThemedText type="small" darkColor={G400} style={styles.label}>PRIVACY</ThemedText>
+                <ThemedText type="small" style={[styles.label, { color: colors.grey500 }]}>PRIVACY</ThemedText>
                 <View style={styles.chipRow}>
                   {PRIVACY_OPTIONS.map((p) => (
                     <TouchableOpacity
                       key={p}
                       activeOpacity={0.8}
-                      style={[
-                        styles.chip,
-                        privacy === p && styles.chipActive
-                      ]}
+                      style={[styles.chip, privacy === p && styles.chipActive]}
                       onPress={() => setPrivacy(p)}
                     >
-                      <ThemedText 
-                        type="caption" 
-                        darkColor={privacy === p ? G800 : G400}
-                        style={privacy === p && styles.chipTextActive}
+                      <ThemedText
+                        type="caption"
+                        style={[
+                          styles.chipText,
+                          {
+                            color: privacy === p ? colors.grey900 : colors.grey500,
+                            fontFamily: privacy === p ? typography.fontFamily.semibold : typography.fontFamily.medium,
+                          },
+                        ]}
                       >
                         {p === 'invite_only' ? 'Invite Only' : 'Public Link'}
                       </ThemedText>
@@ -204,22 +201,24 @@ export function CreateEventSheet({ open, onClose, convexUserId }: Props) {
               </View>
 
               <View style={styles.formSection}>
-                <ThemedText type="small" darkColor={G400} style={styles.label}>RETENTION (DAYS)</ThemedText>
+                <ThemedText type="small" style={[styles.label, { color: colors.grey500 }]}>RETENTION (DAYS)</ThemedText>
                 <View style={styles.chipRow}>
                   {RETENTION_OPTIONS.map((d) => (
                     <TouchableOpacity
                       key={d}
                       activeOpacity={0.8}
-                      style={[
-                        styles.chip,
-                        retentionDays === d && styles.chipActive
-                      ]}
+                      style={[styles.chip, retentionDays === d && styles.chipActive]}
                       onPress={() => setRetentionDays(d)}
                     >
-                      <ThemedText 
-                        type="caption" 
-                        darkColor={retentionDays === d ? G800 : G400}
-                        style={retentionDays === d && styles.chipTextActive}
+                      <ThemedText
+                        type="caption"
+                        style={[
+                          styles.chipText,
+                          {
+                            color: retentionDays === d ? colors.grey900 : colors.grey500,
+                            fontFamily: retentionDays === d ? typography.fontFamily.semibold : typography.fontFamily.medium,
+                          },
+                        ]}
                       >
                         {d} Days
                       </ThemedText>
@@ -229,24 +228,26 @@ export function CreateEventSheet({ open, onClose, convexUserId }: Props) {
               </View>
 
               {error && (
-                <ThemedText type="small" style={[styles.errorText, { color: Colors.dark.error }]}>
+                <ThemedText type="small" style={[styles.errorText, { color: colors.error }]}>
                   {error}
                 </ThemedText>
               )}
 
               <View style={styles.footer}>
                 <Button
+                  variant="primary"
+                  fullWidth
+                  size="lg"
                   onPress={handleCreate}
                   loading={isCreating}
                   disabled={!name.trim() || isCreating}
-                  fullWidth
                 >
                   Create Event
                 </Button>
               </View>
             </>
           )}
-        </BottomSheetScrollView>
+        </ScrollView>
       </KeyboardAvoidingView>
     </BottomSheet>
   );
@@ -255,82 +256,78 @@ export function CreateEventSheet({ open, onClose, convexUserId }: Props) {
 const styles = StyleSheet.create({
   keyboard: { flex: 1 },
   content: {
-    padding: SPACING.xl,
     paddingBottom: 60,
-  },
-  title: {
-    marginBottom: 8,
-    textAlign: 'center',
   },
   subtitle: {
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: spacing[6],
   },
   successContainer: {
     alignItems: 'center',
-    paddingTop: 20,
+    paddingTop: spacing[5],
   },
   successIcon: {
     width: 64,
     height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(108, 240, 115, 0.1)',
+    borderRadius: radii['3xl'],
+    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: spacing[6],
   },
   inviteBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    padding: 16,
-    borderRadius: 12,
+    backgroundColor: colors.grey50,
+    padding: spacing[4],
+    borderRadius: radii.md,
     width: '100%',
-    marginBottom: 32,
+    marginBottom: spacing[8],
   },
   inviteUrl: {
     flex: 1,
-    marginRight: 12,
+    marginRight: spacing[3],
   },
   copyButton: {
-    padding: 8,
+    padding: spacing[2],
   },
   buttonStack: {
     width: '100%',
-    gap: 12,
+    gap: spacing[3],
   },
   formSection: {
-    marginTop: 24,
+    marginTop: spacing[6],
   },
   label: {
     letterSpacing: 1.2,
-    marginBottom: 12,
+    fontFamily: typography.fontFamily.bold,
+    marginBottom: spacing[3],
   },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: spacing[2],
   },
   chip: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingVertical: spacing[2.5],
+    paddingHorizontal: spacing[4],
+    borderRadius: radii.sm,
+    backgroundColor: colors.grey100,
     borderWidth: 1,
     borderColor: 'transparent',
   },
   chipActive: {
-    backgroundColor: PRIMARY,
-    borderColor: PRIMARY,
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
-  chipTextActive: {
-    fontWeight: '700',
+  chipText: {
+    fontFamily: typography.fontFamily.medium,
   },
   errorText: {
-    marginTop: 16,
+    marginTop: spacing[4],
     textAlign: 'center',
   },
   footer: {
-    marginTop: 40,
+    marginTop: spacing[10],
   },
 });

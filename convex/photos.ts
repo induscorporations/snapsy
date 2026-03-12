@@ -1,6 +1,7 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
 import { getConvexUserId } from './lib/auth';
+import { api } from './_generated/api';
 
 export const generateUploadUrl = mutation({
   args: { userId: v.optional(v.id('users')) },
@@ -34,6 +35,7 @@ export const save = mutation({
       uploadedBy: args.uploadedBy,
       createdAt: Date.now(),
     });
+    const event = await ctx.db.get(args.eventId);
     // Placeholder face matching: create a match for each event member who has a face on file.
     // Replace with real face detection + similarity when ML is integrated.
     const members = await ctx.db
@@ -52,11 +54,28 @@ export const save = mutation({
         .filter((q) => q.eq(q.field('userId'), member.userId))
         .unique();
       if (!existing) {
-        await ctx.db.insert('photoMatches', {
+        const matchId = await ctx.db.insert('photoMatches', {
           photoId,
           userId: member.userId,
           confidence: PLACEHOLDER_MATCH_CONFIDENCE,
         });
+
+        // Fire-and-forget push notification for the matched user
+        if (event) {
+          const matchedUser = await ctx.db.get(member.userId);
+          const pushToken = (matchedUser as any)?.pushToken as string | undefined;
+          if (pushToken) {
+            await ctx.scheduler.runAfter(
+              0,
+              api.notifications.sendNewMatchNotification,
+              {
+                pushToken,
+                eventName: event.name,
+                eventId: event._id,
+              } as any
+            );
+          }
+        }
       }
     }
     return photoId;
@@ -143,5 +162,32 @@ export const recordDownload = mutation({
         downloadedAt: Date.now(),
       });
     }
+  },
+});
+
+export const deletePhoto = mutation({
+  args: { photoId: v.id('photos') },
+  handler: async (ctx, { photoId }) => {
+    const userId = await getConvexUserId(ctx);
+    if (!userId) throw new Error('Unauthorized');
+
+    const photo = await ctx.db.get(photoId);
+    if (!photo) return;
+
+    const event = await ctx.db.get(photo.eventId);
+    if (!event) return;
+    if (event.hostId !== userId) {
+      throw new Error('Only the host can delete this photo');
+    }
+
+    const matches = await ctx.db
+      .query('photoMatches')
+      .withIndex('by_photo', (q) => q.eq('photoId', photoId))
+      .collect();
+    for (const m of matches) {
+      await ctx.db.delete(m._id);
+    }
+
+    await ctx.db.delete(photoId);
   },
 });

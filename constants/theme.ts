@@ -116,3 +116,8 @@ export const Fonts = {
     },
   }) as Record<string, string>,
 };
+
+// ─── BRIDGE TO SNAPSY TOKENS ─────────────────────────────────────────────────
+// Allows existing code using theme.ts to also access token values
+// without breaking anything
+export { colors, spacing, radii, typography, shadows, TAP_TARGET, iconSize } from './tokens';

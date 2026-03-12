@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { typography } from '@/constants/tokens';
 import { 
   G100, 
   G400, 
@@ -87,13 +88,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: 14,
-    fontFamily: Fonts.bold,
+    fontSize: typography.size.base,
+    fontFamily: typography.fontFamily.bold,
     color: G800,
-    fontWeight: '700',
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: typography.size.sm,
     fontFamily: Fonts.regular,
     color: G400,
     marginTop: 2,

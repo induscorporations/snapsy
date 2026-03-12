@@ -1,10 +1,12 @@
 import Animated from 'react-native-reanimated';
 
+import { typography } from '@/constants/tokens';
+
 export function HelloWave() {
   return (
     <Animated.Text
       style={{
-        fontSize: 28,
+        fontSize: typography.size['4xl'],
         lineHeight: 32,
         marginTop: -6,
         animationName: {

@@ -1,11 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
+import { typography } from '@/constants/tokens';
 import { 
   PRIMARY, 
   G100, 
   G600, 
   PRIMARY_DARK,
-  Fonts 
 } from '@/constants/theme';
 
 interface ProgressBarProps {
@@ -41,15 +41,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   label: {
-    fontSize: 12,
-    fontFamily: Fonts.medium,
-    fontWeight: '500',
+    fontSize: typography.size.sm,
+    fontFamily: typography.fontFamily.medium,
     color: G600,
   },
   value: {
-    fontSize: 12,
-    fontFamily: Fonts.bold,
-    fontWeight: '600',
+    fontSize: typography.size.sm,
+    fontFamily: typography.fontFamily.semibold,
     color: PRIMARY_DARK,
   },
   track: {

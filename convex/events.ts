@@ -40,9 +40,14 @@ export const listByUser = query({
     const events = await Promise.all(
       memberships.map((m) => ctx.db.get(m.eventId))
     );
-    return (events.filter(Boolean) as NonNullable<typeof events[0]>[]).sort(
-      (a, b) => b.createdAt - a.createdAt
+    const now = Date.now();
+    const activeEvents = (events.filter(Boolean) as NonNullable<typeof events[0]>[]).filter(
+      (e) => {
+        const expiresAt = e.createdAt + e.retentionDays * 24 * 60 * 60 * 1000;
+        return now < expiresAt;
+      }
     );
+    return activeEvents.sort((a, b) => b.createdAt - a.createdAt);
   },
 });
 
@@ -55,8 +60,19 @@ export const get = query({
       .query('eventMembers')
       .withIndex('by_event_user', (q: any) => q.eq('eventId', eventId).eq('userId', userId))
       .unique();
-    if (!member) throw new Error('Forbidden: not an event member');
-    return await ctx.db.get(eventId);
+    if (!member) return null;
+    const event = await ctx.db.get(eventId);
+    if (!event) return null;
+
+    const members = await ctx.db
+      .query('eventMembers')
+      .withIndex('by_event', (q: any) => q.eq('eventId', eventId))
+      .collect();
+
+    return {
+      ...event,
+      memberCount: members.length,
+    };
   },
 });
 
@@ -113,5 +129,57 @@ export const isMember = query({
       )
       .unique();
     return !!m;
+  },
+});
+
+export const leaveEvent = mutation({
+  args: {
+    eventId: v.id('events'),
+    userId: v.id('users'),
+  },
+  handler: async (ctx, { eventId, userId }) => {
+    const callerId = await requireConvexUserId(ctx);
+    if (callerId !== userId) throw new Error('Forbidden: can only leave as yourself');
+
+    const membership = await ctx.db
+      .query('eventMembers')
+      .withIndex('by_event_user', (q) =>
+        q.eq('eventId', eventId).eq('userId', userId)
+      )
+      .unique();
+
+    if (!membership) return;
+
+    // Prevent host from leaving their own event (they should delete instead)
+    const event = await ctx.db.get(eventId);
+    if (event && event.hostId === userId) {
+      throw new Error('Host cannot leave their own event');
+    }
+
+    await ctx.db.delete(membership._id);
+  },
+});
+
+export const deleteEvent = mutation({
+  args: {
+    eventId: v.id('events'),
+  },
+  handler: async (ctx, { eventId }) => {
+    const callerId = await requireConvexUserId(ctx);
+    const event = await ctx.db.get(eventId);
+    if (!event) return;
+    if (event.hostId !== callerId) {
+      throw new Error('Only the host can delete this event');
+    }
+
+    const memberships = await ctx.db
+      .query('eventMembers')
+      .withIndex('by_event', (q) => q.eq('eventId', eventId))
+      .collect();
+    for (const m of memberships) {
+      await ctx.db.delete(m._id);
+    }
+
+    await ctx.db.delete(eventId);
   },
 });

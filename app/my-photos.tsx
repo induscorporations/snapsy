@@ -6,9 +6,10 @@ import { api } from '@/convex/_generated/api';
 import { Image as ExpoImage } from 'expo-image';
 
 import { useAuthStore } from '@/stores/useAuthStore';
-import { Colors, SPACING, BACKGROUND_DARK, G400, PRIMARY, G700 } from '@/constants/theme';
-import { Icon } from '@/components/ui/Icon';
+import { colors, spacing, radii } from '@/constants/tokens';
 import { ThemedText } from '@/components/ui/Typography';
+import { ArrowLeft, Image } from 'lucide-react-native';
+import { Button } from '@/components';
 
 export default function MyPhotosScreen() {
   const router = useRouter();
@@ -18,23 +19,27 @@ export default function MyPhotosScreen() {
     convexUserId ? { userId: convexUserId as any } : 'skip'
   );
   const { width } = useWindowDimensions();
-  const size = (width - SPACING.lg * 2 - 16) / 3;
+  const size = (width - spacing[6] * 2 - spacing[4]) / 3;
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.back} activeOpacity={0.7}>
-          <Icon name="arrowLeft" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <ThemedText type="title2" darkColor="#FFFFFF">Photos of you</ThemedText>
-        <ThemedText type="small" darkColor={G400}>All matched photos across events</ThemedText>
+        <Button
+          variant="ghost"
+          size="md"
+          onPress={() => router.back()}
+          iconOnly={<ArrowLeft size={24} strokeWidth={1.75} color={colors.white} />}
+          style={styles.back}
+        />
+        <ThemedText type="title2" darkColor={colors.white}>Photos of you</ThemedText>
+        <ThemedText type="small" darkColor={colors.grey400}>All matched photos across events</ThemedText>
       </View>
 
       {photos && photos.length === 0 && (
         <View style={styles.empty}>
-          <Icon name="image" size={48} color={G700} style={{ marginBottom: 16 }} />
-          <ThemedText type="body2" darkColor={G400} style={{ textAlign: 'center' }}>
+          <Image size={48} strokeWidth={1.75} color={colors.grey700} style={styles.emptyIcon} />
+          <ThemedText type="body2" darkColor={colors.grey400} style={styles.emptyText}>
             No photos of you yet. Join events and add a selfie to get matched.
           </ThemedText>
         </View>
@@ -78,43 +83,45 @@ export default function MyPhotosScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: BACKGROUND_DARK,
+    backgroundColor: colors.darkBg,
   },
   header: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: spacing[6],
     paddingTop: 60,
-    paddingBottom: SPACING.lg,
+    paddingBottom: spacing[6],
   },
   back: {
     width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: SPACING.md,
+    minWidth: 40,
+    marginBottom: spacing[4],
   },
   empty: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: SPACING.xl,
+    paddingHorizontal: spacing[8],
+  },
+  emptyIcon: {
+    marginBottom: spacing[4],
+  },
+  emptyText: {
+    textAlign: 'center',
   },
   grid: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: spacing[6],
     paddingBottom: 40,
   },
   row: {
-    gap: 8,
-    marginBottom: 8,
+    gap: spacing[2],
+    marginBottom: spacing[2],
   },
   thumb: {
-    borderRadius: 12,
+    borderRadius: radii.md,
     overflow: 'hidden',
   },
   thumbInner: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: colors.darkSurface2,
   },
   thumbImage: {
     width: '100%',
@@ -123,6 +130,6 @@ const styles = StyleSheet.create({
   thumbPlaceholder: {
     width: '100%',
     height: '100%',
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: colors.darkSurface2,
   },
 });

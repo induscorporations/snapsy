@@ -9,12 +9,12 @@ import Animated, {
   withSpring 
 } from 'react-native-reanimated';
 
-import { BACKGROUND_DARK, SPACING, PRIMARY, G400, G800 } from '@/constants/theme';
+import { colors, spacing, radii, iconSize } from '@/constants/tokens';
 import { ThemedText } from '@/components/ui/Typography';
-import { Icon } from '@/components/ui/Icon';
-import { ProgressBar } from '@/components/ui/ProgressBar';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
+import { ProgressBar, Button } from '@/components';
+import { Upload, CheckCircle } from 'lucide-react-native';
+import { useUIStore } from '@/stores/useUIStore';
+import { BottomSheet } from '@/components/navigation/Navigation';
 
 export default function UploadProgressScreen() {
   const { count = '0' } = useLocalSearchParams<{ count: string }>();
@@ -22,6 +22,9 @@ export default function UploadProgressScreen() {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState<'uploading' | 'matching' | 'notifying' | 'done'>('uploading');
   const totalSteps = 100;
+  const setUploadSuccessSnackbar = useUIStore((s) => s.setUploadSuccessSnackbar);
+  const [cancelSheetOpen, setCancelSheetOpen] = useState(false);
+  const [cancelRequested, setCancelRequested] = useState(false);
 
   useEffect(() => {
     // Prevent accidentally going back during upload
@@ -38,6 +41,10 @@ export default function UploadProgressScreen() {
           clearInterval(interval);
           return 100;
         }
+        if (cancelRequested) {
+          clearInterval(interval);
+          return prev;
+        }
         return prev + 2;
       });
     }, 100);
@@ -46,7 +53,7 @@ export default function UploadProgressScreen() {
       backHandler.remove();
       clearInterval(interval);
     };
-  }, [status]);
+  }, [status, cancelRequested]);
 
   useEffect(() => {
     if (progress < 40) setStatus('uploading');
@@ -62,23 +69,22 @@ export default function UploadProgressScreen() {
       <View style={styles.content}>
         <Animated.View entering={FadeInUp.delay(200)} style={styles.iconContainer}>
           <View style={styles.iconCircle}>
-             <Icon 
-               name={status === 'done' ? 'checkCircle' : 'upload'} 
-               size={48} 
-               color={PRIMARY} 
-               solid={status === 'done'} 
-             />
+             {status === 'done' ? (
+               <CheckCircle size={iconSize['4xl']} strokeWidth={0} fill={colors.primary} color={colors.primary} />
+             ) : (
+               <Upload size={iconSize['4xl']} strokeWidth={1.75} color={colors.primary} />
+             )}
           </View>
         </Animated.View>
 
         <View style={styles.textContainer}>
-          <ThemedText type="largeTitle" darkColor="#FFFFFF" style={styles.title}>
+          <ThemedText type="largeTitle" darkColor={colors.white} style={styles.title}>
             {status === 'uploading' && 'Uploading...'}
             {status === 'matching' && 'Finding faces...'}
             {status === 'notifying' && 'Sending alerts...'}
             {status === 'done' && 'All set!'}
           </ThemedText>
-          <ThemedText type="body1" darkColor={G400} style={styles.body}>
+          <ThemedText type="body1" darkColor={colors.grey400} style={styles.body}>
             {status === 'uploading' && `Moving ${count} memories to the cloud.`}
             {status === 'matching' && 'Our privacy-first AI is scanning for you.'}
             {status === 'notifying' && 'Notifying guests about their matched photos.'}
@@ -89,25 +95,66 @@ export default function UploadProgressScreen() {
         <View style={styles.progressContainer}>
            <ProgressBar value={progress} />
            <View style={styles.progressMeta}>
-             <ThemedText type="caption" darkColor={G400}>{progress}% complete</ThemedText>
-             <ThemedText type="caption" darkColor={G400}>{status.toUpperCase()}</ThemedText>
+             <ThemedText type="caption" darkColor={colors.grey400}>{progress}% complete</ThemedText>
+             <ThemedText type="caption" darkColor={colors.grey400}>{status.toUpperCase()}</ThemedText>
            </View>
         </View>
 
-        {status === 'done' && (
-          <Animated.View entering={FadeIn.duration(500)} style={styles.footer}>
+        <Animated.View entering={FadeIn.duration(500)} style={styles.footer}>
+          {status === 'done' ? (
             <Button 
               variant="primary" 
               size="lg" 
               fullWidth 
-              onPress={() => router.back()}
-              iconL="checkCircle"
+              onPress={() => {
+                setUploadSuccessSnackbar(true);
+                router.back();
+              }}
+              iconLeft={<CheckCircle size={iconSize.md} strokeWidth={0} fill={colors.grey900} color={colors.grey900} />}
             >
               Done
             </Button>
-          </Animated.View>
-        )}
+          ) : (
+            <Button
+              variant="ghost"
+              size="md"
+              fullWidth
+              onPress={() => setCancelSheetOpen(true)}
+            >
+              Cancel Upload
+            </Button>
+          )}
+        </Animated.View>
       </View>
+
+      <BottomSheet
+        visible={cancelSheetOpen}
+        onClose={() => setCancelSheetOpen(false)}
+        title="Cancel Upload?"
+        subtitle="Photos already uploaded will remain. Remaining photos won't be uploaded."
+        snapHeight={0.35}
+      >
+        <View style={styles.sheetContent}>
+          <Button
+            variant="destructive"
+            fullWidth
+            onPress={() => {
+              setCancelRequested(true);
+              setCancelSheetOpen(false);
+              router.back();
+            }}
+          >
+            Yes, Cancel Upload
+          </Button>
+          <Button
+            variant="ghost"
+            fullWidth
+            onPress={() => setCancelSheetOpen(false)}
+          >
+            Continue Uploading
+          </Button>
+        </View>
+      </BottomSheet>
     </View>
   );
 }
@@ -115,11 +162,11 @@ export default function UploadProgressScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: BACKGROUND_DARK,
+    backgroundColor: colors.darkBg,
   },
   content: {
     flex: 1,
-    paddingHorizontal: SPACING.xl,
+    paddingHorizontal: spacing[8],
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -130,11 +177,11 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: 'rgba(108, 240, 115, 0.1)',
+    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(108, 240, 115, 0.2)',
+    borderColor: colors.primaryMid,
   },
   textContainer: {
     alignItems: 'center',
@@ -142,11 +189,11 @@ const styles = StyleSheet.create({
   },
   title: {
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: spacing[4],
   },
   body: {
     textAlign: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing[5],
   },
   progressContainer: {
     width: '100%',
@@ -155,12 +202,17 @@ const styles = StyleSheet.create({
   progressMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 12,
+    marginTop: spacing[3],
   },
   footer: {
     width: '100%',
     position: 'absolute',
     bottom: 60,
-    paddingHorizontal: SPACING.xl,
+    paddingHorizontal: spacing[8],
+  },
+  sheetContent: {
+    paddingTop: spacing[4],
+    paddingBottom: spacing[6],
+    gap: spacing[3],
   },
 });

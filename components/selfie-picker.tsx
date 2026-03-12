@@ -1,14 +1,14 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  ActionSheetIOS,
-  Platform,
+  Image,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 
@@ -26,12 +26,14 @@ type Props = {
 };
 
 export function SelfiePicker({ userId, onSaved, variant = 'default' }: Props) {
+  const cameraRef = useRef<CameraView | null>(null);
   const [saving, setSaving] = useState(false);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const saveFace = useMutation(api.faces.save);
 
-  const handleImage = async (uri: string) => {
-    setPreviewUri(uri);
+  const handleSave = async () => {
+    if (!previewUri) return;
     setSaving(true);
     try {
       // In a real app, this is where we'd run face detection/embedding on-device.
@@ -53,20 +55,18 @@ export function SelfiePicker({ userId, onSaved, variant = 'default' }: Props) {
     }
   };
 
-  const openCamera = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Allow camera access to take a selfie.');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets[0]) {
-      await handleImage(result.assets[0].uri);
+  const handleCapture = async () => {
+    if (!cameraRef.current || saving) return;
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+        skipProcessing: true,
+      });
+      if (photo?.uri) {
+        setPreviewUri(photo.uri);
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Could not capture photo.');
     }
   };
 
@@ -83,110 +83,151 @@ export function SelfiePicker({ userId, onSaved, variant = 'default' }: Props) {
       quality: 0.8,
     });
     if (!result.canceled && result.assets[0]) {
-      await handleImage(result.assets[0].uri);
+      setPreviewUri(result.assets[0].uri);
     }
   };
 
-  const showOptions = () => {
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: ['Cancel', 'Take selfie', 'Choose from library'],
-          cancelButtonIndex: 0,
-        },
-        (index) => {
-          if (index === 1) openCamera();
-          else if (index === 2) openLibrary();
-        }
-      );
-    } else {
-      Alert.alert('Update selfie', undefined, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Take selfie', onPress: openCamera },
-        { text: 'Choose from library', onPress: openLibrary },
-      ]);
-    }
-  };
+  if (!permission) {
+    return null;
+  }
 
-  if (variant === 'onboarding') {
+  if (!permission.granted) {
     return (
-      <View style={styles.onboardingContainer}>
-        <TouchableOpacity 
-          style={styles.previewCircle} 
-          onPress={showOptions}
-          disabled={saving}
+      <View style={styles.permissionContainer}>
+        <ThemedText type="body2" darkColor={G400}>
+          Allow camera access to take a selfie.
+        </ThemedText>
+        <Button
+          variant="primary"
+          size="md"
+          onPress={requestPermission}
+          style={{ marginTop: SPACING.md }}
         >
-          {previewUri ? (
-            <View style={styles.previewActive}>
-               <Icon name="checkCircle" size={32} color={PRIMARY} solid />
-               {saving && (
-                 <View style={styles.savingOverlay}>
-                   <ActivityIndicator color={PRIMARY} />
-                 </View>
-               )}
-            </View>
-          ) : (
-            <Icon name="camera" size={32} color={G400} />
-          )}
-        </TouchableOpacity>
-        
-        <Button 
-          variant="primary" 
-          size="lg" 
-          fullWidth 
-          onPress={showOptions}
-          loading={saving}
-          disabled={saving}
-          iconL="camera"
-        >
-          {previewUri ? 'Change Selfie' : 'Take Selfie'}
+          Enable Camera
         </Button>
       </View>
     );
   }
 
   return (
-    <Button 
-      variant="ghost" 
-      size="md" 
-      onPress={showOptions}
-      loading={saving}
-      disabled={saving}
-    >
-      Update selfie
-    </Button>
+    <View style={styles.cameraWrapper}>
+      <View style={styles.cameraContainer}>
+        {previewUri ? (
+          <Image source={{ uri: previewUri }} style={styles.previewImage} />
+        ) : (
+          <CameraView
+            ref={cameraRef}
+            style={styles.camera}
+            facing="front"
+          />
+        )}
+        {saving && (
+          <View style={styles.cameraSavingOverlay}>
+            <ActivityIndicator color={PRIMARY} />
+          </View>
+        )}
+      </View>
+
+      <View style={styles.controls}>
+        {!previewUri ? (
+          <TouchableOpacity
+            style={styles.captureButton}
+            onPress={handleCapture}
+            disabled={saving}
+          >
+            <Icon name="camera" size={32} color={BACKGROUND_DARK} solid />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.actionRow}>
+            <Button
+              variant="ghost"
+              size="md"
+              onPress={() => setPreviewUri(null)}
+              disabled={saving}
+            >
+              Retake
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
+              onPress={handleSave}
+              loading={saving}
+              disabled={saving}
+            >
+              Use this photo
+            </Button>
+          </View>
+        )}
+
+        <TouchableOpacity
+          onPress={openLibrary}
+          disabled={saving}
+          style={styles.libraryLink}
+        >
+          <ThemedText type="caption" darkColor={G400}>
+            Choose from library
+          </ThemedText>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  onboardingContainer: {
-    alignItems: 'center',
+  cameraWrapper: {
     width: '100%',
-  },
-  previewCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: G800,
-    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
   },
-  previewActive: {
+  cameraContainer: {
+    width: '100%',
+    height: '60%',
+    maxHeight: 360,
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+    backgroundColor: G800,
+  },
+  camera: {
     width: '100%',
     height: '100%',
-    borderRadius: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(108, 240, 115, 0.1)',
   },
-  savingOverlay: {
+  cameraSavingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 60,
+    backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  controls: {
+    marginTop: SPACING.lg,
+    alignItems: 'center',
+    width: '100%',
+  },
+  captureButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: PRIMARY,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginTop: SPACING.md,
+    gap: SPACING.md,
+  },
+  libraryLink: {
+    marginTop: SPACING.md,
+  },
+  permissionContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.lg,
   },
 });

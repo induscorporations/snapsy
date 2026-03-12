@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@clerk/clerk-expo';
 import { useQuery, useMutation } from 'convex/react';
@@ -7,7 +7,7 @@ import { api } from '@/convex/_generated/api';
 
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { Colors } from '@/constants/theme';
+import { colors, spacing, typography } from '@/constants/tokens';
 
 const CONVEX_WAIT_MS = 6000; // If Convex doesn't respond, proceed anyway so app isn't stuck
 
@@ -25,6 +25,8 @@ export default function IndexScreen() {
   const onboardingHydrated = useUIStore((s) => s.onboardingHydrated);
   const hydrateOnboarding = useUIStore((s) => s.hydrateOnboarding);
   const [convexTimedOut, setConvexTimedOut] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const userFace = useQuery(api.faces.getUserFace, 'skip');
 
   useEffect(() => {
     hydrateOnboarding();
@@ -41,6 +43,7 @@ export default function IndexScreen() {
     if (!isLoaded) return;
 
     if (!isSignedIn) {
+      setChecking(false);
       router.replace('/(auth)/sign-in');
       return;
     }
@@ -66,18 +69,34 @@ export default function IndexScreen() {
     if (!convexUserId && !convexTimedOut) return;
 
     if (!hasCompletedOnboarding) {
+      setChecking(false);
       router.replace('/onboarding');
       return;
     }
 
-    router.replace('/(tabs)');
-  }, [isLoaded, isSignedIn, onboardingHydrated, hasCompletedOnboarding, userByClerk, convexUserId, convexTimedOut, router]);
+    const hasFace = !!userFace;
+    if (hasCompletedOnboarding && !hasFace) {
+      setChecking(false);
+      router.replace('/face-setup');
+      return;
+    }
 
-  return (
-    <View style={[styles.container, { backgroundColor: Colors.dark.background }]}>
-      <ActivityIndicator size="large" color={Colors.light.primary} />
-    </View>
-  );
+    setChecking(false);
+    router.replace('/(tabs)');
+  }, [isLoaded, isSignedIn, onboardingHydrated, hasCompletedOnboarding, userByClerk, convexUserId, userFace, convexTimedOut, router]);
+
+  if (!isLoaded || checking) {
+    return (
+      <View style={styles.splashContainer}>
+        <Text style={styles.splashLogo}>Snapsy</Text>
+        <Text style={styles.splashTagline}>Every moment, perfectly yours.</Text>
+        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: spacing[4] }} />
+      </View>
+    );
+  }
+
+  // Fallback in case nothing else matched (should be rare)
+  return <View style={[styles.container, { backgroundColor: colors.darkBg }]} />;
 }
 
 const styles = StyleSheet.create({
@@ -85,5 +104,23 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  splashContainer: {
+    flex: 1,
+    backgroundColor: colors.primaryDeep,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing[6],
+  },
+  splashLogo: {
+    fontFamily: typography.fontFamily.bold,
+    fontSize: typography.size['4xl'],
+    color: colors.primary,
+    marginBottom: spacing[2],
+  },
+  splashTagline: {
+    fontFamily: typography.fontFamily.regular,
+    fontSize: typography.size.lg,
+    color: colors.white,
   },
 });

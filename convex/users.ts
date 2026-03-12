@@ -85,3 +85,19 @@ export const getStorageUsage = query({
     };
   },
 });
+
+export const storePushToken = mutation({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity?.subject) return;
+
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_clerk_id', (q: any) => q.eq('clerkId', identity.subject))
+      .unique();
+
+    if (!user) return;
+    await ctx.db.patch(user._id, { pushToken: token });
+  },
+});

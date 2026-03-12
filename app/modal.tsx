@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { View, StyleSheet, TouchableOpacity, useWindowDimensions, Alert, StatusBar } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, useWindowDimensions, Alert, StatusBar, Share } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useQuery, useMutation } from 'convex/react';
@@ -9,10 +9,11 @@ import { api } from '@/convex/_generated/api';
 import { Image as ExpoImage } from 'expo-image';
 
 import { useAuthStore } from '@/stores/useAuthStore';
-import { Colors, SPACING, BACKGROUND_DARK, G400, PRIMARY, G800 } from '@/constants/theme';
-import { Icon } from '@/components/ui/Icon';
+import { colors, spacing, radii, iconSize } from '@/constants/tokens';
 import { ThemedText } from '@/components/ui/Typography';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components';
+import { ArrowLeft, ArrowRight, AlertCircle, Download, Share2, MoreHorizontal, EyeOff, Trash2, UserMinus } from 'lucide-react-native';
+import { BottomSheet } from '@/components/navigation/Navigation';
 
 const SWIPE_THRESHOLD = 60;
 const VELOCITY_THRESHOLD = 200;
@@ -23,7 +24,9 @@ export default function ModalScreen() {
   const convexUserId = useAuthStore((s) => s.convexUserId);
   const { width, height } = useWindowDimensions();
   const [saving, setSaving] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const hideFromMyPhotos = useMutation(api.photoMatches.hideFromMyPhotos);
+  const deletePhoto = useMutation(api.photos.deletePhoto);
 
   const photoIds = photoIdsParam ? photoIdsParam.split(',').filter(Boolean) : [];
   const currentIndex = photoId && photoIds.length ? photoIds.indexOf(photoId) : -1;
@@ -100,6 +103,18 @@ export default function ModalScreen() {
     }
   };
 
+  const handleShare = async () => {
+    if (!photo?.url) return;
+    try {
+      await Share.share({
+        url: photo.url,
+        message: 'Check out this photo from Snapsy!',
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   if (!photoId || photo === null) {
     if (photo === null) router.back();
     return null;
@@ -110,25 +125,25 @@ export default function ModalScreen() {
       <StatusBar barStyle="light-content" />
       
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.closeButton}
+        <Button
+          variant="ghost"
+          size="md"
           onPress={() => router.back()}
-          activeOpacity={0.7}
-        >
-          <Icon name="arrowLeft" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+          iconOnly={<ArrowLeft size={24} strokeWidth={1.75} color={colors.white} />}
+          style={styles.closeButton}
+        />
         <View style={styles.headerInfo}>
-          <ThemedText type="small" darkColor="#FFFFFF" style={{ textAlign: 'center' }}>
+          <ThemedText type="small" darkColor={colors.white} style={styles.headerTitle}>
             {currentIndex >= 0 ? `${currentIndex + 1} of ${photoIds.length}` : 'Viewing Photo'}
           </ThemedText>
         </View>
-        <TouchableOpacity
+        <Button
+          variant="ghost"
+          size="md"
+          onPress={() => setSheetOpen(true)}
+          iconOnly={<MoreHorizontal size={22} strokeWidth={1.75} color={colors.grey400} />}
           style={styles.moreButton}
-          onPress={handleNotMe}
-          activeOpacity={0.7}
-        >
-          <Icon name="alertCircle" size={22} color={G400} />
-        </TouchableOpacity>
+        />
       </View>
 
       <GestureDetector gesture={panGesture}>
@@ -153,14 +168,14 @@ export default function ModalScreen() {
             onPress={goPrev}
             disabled={!canGoPrev}
           >
-            <Icon name="arrowLeft" size={24} color={canGoPrev ? "#FFFFFF" : "rgba(255,255,255,0.2)"} />
+            <ArrowLeft size={24} strokeWidth={1.75} color={canGoPrev ? colors.white : colors.darkSurface2} />
           </TouchableOpacity>
 
           <Button
             onPress={handleDownload}
             variant="primary"
             loading={saving}
-            iconL="download"
+            iconLeft={<Download size={20} strokeWidth={1.75} color={colors.grey900} />}
             style={styles.downloadBtn}
           >
             Save to Device
@@ -171,16 +186,116 @@ export default function ModalScreen() {
             onPress={goNext}
             disabled={!canGoNext}
           >
-            <Icon name="arrowRight" size={24} color={canGoNext ? "#FFFFFF" : "rgba(255,255,255,0.2)"} />
+            <ArrowRight size={24} strokeWidth={1.75} color={canGoNext ? colors.white : colors.darkSurface2} />
           </TouchableOpacity>
         </View>
-        
+
+        <Button
+          variant="ghost"
+          size="md"
+          onPress={handleShare}
+          iconLeft={<Share2 size={20} strokeWidth={1.75} color={colors.white} />}
+          style={styles.shareButton}
+        >
+          Share
+        </Button>
+
         {convexUserId && (
           <TouchableOpacity style={styles.notMe} onPress={handleNotMe}>
-            <ThemedText type="caption" darkColor={G400}>Not me? Hide from my photos</ThemedText>
+            <ThemedText type="caption" darkColor={colors.grey400}>Not me? Hide from my photos</ThemedText>
           </TouchableOpacity>
         )}
       </View>
+
+      <BottomSheet
+        visible={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        title="More options"
+        snapHeight={0.4}
+      >
+        <View style={styles.sheetList}>
+          {/* Host-only actions */}
+          {photo && convexUserId && (photo as any).eventHostId === convexUserId && (
+            <>
+              <TouchableOpacity
+                style={styles.sheetItem}
+                onPress={() => {
+                  Alert.alert(
+                    'Delete photo',
+                    'This will permanently delete this photo for everyone in the event. Continue?',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Delete',
+                        style: 'destructive',
+                        onPress: async () => {
+                          try {
+                            await deletePhoto({ photoId: photoId as any });
+                            setSheetOpen(false);
+                            router.back();
+                          } catch (e) {
+                            Alert.alert('Error', 'Could not delete photo.');
+                          }
+                        },
+                      },
+                    ]
+                  );
+                }}
+              >
+                <Trash2 size={iconSize.md} strokeWidth={1.75} color={colors.error} />
+                <ThemedText type="body1" darkColor={colors.error}>Delete Photo</ThemedText>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.sheetItem}
+                onPress={async () => {
+                  // Placeholder: requires matchId to remove a specific user match
+                  Alert.alert('Coming soon', 'Remove from specific user is not yet implemented.');
+                }}
+              >
+                <UserMinus size={iconSize.md} strokeWidth={1.75} color={colors.warning} />
+                <ThemedText type="body1" darkColor={colors.warning}>Remove from User</ThemedText>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {/* Guest / general actions */}
+          <TouchableOpacity
+            style={styles.sheetItem}
+            onPress={async () => {
+              await handleDownload();
+              setSheetOpen(false);
+            }}
+          >
+            <Download size={iconSize.md} strokeWidth={1.75} color={colors.grey700} />
+            <ThemedText type="body1" darkColor={colors.grey800}>Download</ThemedText>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.sheetItem}
+            onPress={async () => {
+              await handleShare();
+              setSheetOpen(false);
+            }}
+          >
+            <Share2 size={iconSize.md} strokeWidth={1.75} color={colors.grey700} />
+            <ThemedText type="body1" darkColor={colors.grey800}>Share</ThemedText>
+          </TouchableOpacity>
+
+          {convexUserId && (
+            <TouchableOpacity
+              style={styles.sheetItem}
+              onPress={async () => {
+                await handleNotMe();
+                setSheetOpen(false);
+              }}
+            >
+              <EyeOff size={iconSize.md} strokeWidth={1.75} color={colors.grey700} />
+              <ThemedText type="body1" darkColor={colors.grey800}>Hide (Not me)</ThemedText>
+            </TouchableOpacity>
+          )}
+        </View>
+      </BottomSheet>
     </View>
   );
 }
@@ -188,32 +303,28 @@ export default function ModalScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: BACKGROUND_DARK,
+    backgroundColor: colors.darkBg,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingTop: 60,
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.md,
+    paddingHorizontal: spacing[6],
+    paddingBottom: spacing[4],
   },
   closeButton: {
     width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    minWidth: 44,
   },
   headerInfo: {
     flex: 1,
   },
+  headerTitle: {
+    textAlign: 'center',
+  },
   moreButton: {
     width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
+    minWidth: 44,
   },
   viewer: {
     flex: 1,
@@ -224,24 +335,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   placeholder: {
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: colors.darkSurface2,
   },
   footer: {
     paddingBottom: 50,
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.md,
+    paddingHorizontal: spacing[6],
+    paddingTop: spacing[4],
   },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 16,
+    gap: spacing[4],
   },
   navButton: {
     width: 50,
     height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: radii['2xl'],
+    backgroundColor: colors.darkSurface2,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -251,8 +362,21 @@ const styles = StyleSheet.create({
   downloadBtn: {
     flex: 1,
   },
+  shareButton: {
+    marginTop: spacing[3],
+  },
   notMe: {
-    marginTop: 20,
+    marginTop: spacing[5],
     alignItems: 'center',
+  },
+  sheetList: {
+    paddingVertical: spacing[4],
+    gap: spacing[2],
+  },
+  sheetItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing[3],
+    gap: spacing[3],
   },
 });

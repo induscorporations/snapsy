@@ -1,18 +1,15 @@
 import { useState } from 'react';
-import {
-  View,
-  StyleSheet,
-  Alert,
-} from 'react-native';
+import { View, StyleSheet, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useMutation } from 'convex/react';
 import { useRouter } from 'expo-router';
 import { api } from '@/convex/_generated/api';
+import { Upload } from 'lucide-react-native';
 
 import { uploadPhotoFromUri } from '@/lib/uploadPhoto';
 import { useUploadStore } from '@/stores/useUploadStore';
-import { Colors, SPACING, RADIUS, PRIMARY, G900 } from '@/constants/theme';
-import { Button } from '@/components/ui/Button';
+import { Button, ProgressBar, Snackbar } from '@/components';
+import { colors, spacing, iconSize } from '@/constants/tokens';
 
 type Props = {
   eventId: string;
@@ -22,12 +19,19 @@ type Props = {
 export function UploadPhotosButton({ eventId, uploadedBy }: Props) {
   const router = useRouter();
   const [uploading, setUploading] = useState(false);
+  const [snackbar, setSnackbar] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const generateUploadUrl = useMutation(api.photos.generateUploadUrl);
   const savePhoto = useMutation(api.photos.save);
   const addPending = useUploadStore((s) => s.addPending);
   const addToQueue = useUploadStore((s) => s.addToQueue);
   const setProgress = useUploadStore((s) => s.setProgress);
   const clearQueue = useUploadStore((s) => s.clearQueue);
+  const queue = useUploadStore((s) => s.queue);
+
+  const uploadProgress =
+    queue.length > 0
+      ? queue.reduce((acc, q) => acc + q.progress, 0) / queue.length
+      : 0;
 
   const pickAndUpload = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -49,6 +53,7 @@ export function UploadPhotosButton({ eventId, uploadedBy }: Props) {
     });
 
     setUploading(true);
+    setSnackbar(null);
     clearQueue();
     for (const asset of result.assets) {
       addToQueue(asset.uri);
@@ -56,6 +61,7 @@ export function UploadPhotosButton({ eventId, uploadedBy }: Props) {
 
     // Process uploads in background
     (async () => {
+      let hasError = false;
       for (const asset of result.assets) {
         try {
           const out = await uploadPhotoFromUri(asset.uri, {
@@ -67,14 +73,20 @@ export function UploadPhotosButton({ eventId, uploadedBy }: Props) {
           if ('photoId' in out) {
             setProgress(asset.uri, 100, true);
           } else {
+            hasError = true;
             addPending({ uri: asset.uri, eventId, uploadedBy });
             setProgress(asset.uri, 0, false, out.error);
           }
         } catch (e) {
-             addPending({ uri: asset.uri, eventId, uploadedBy });
-             setProgress(asset.uri, 0, false, (e as any).message);
+          hasError = true;
+          addPending({ uri: asset.uri, eventId, uploadedBy });
+          setProgress(asset.uri, 0, false, (e as any).message);
         }
       }
+      setSnackbar({
+        type: hasError ? 'error' : 'success',
+        message: hasError ? 'Upload failed' : 'Photos uploaded',
+      });
       setUploading(false);
       // We don't clear immediately so progress screen can see results if needed
     })();
@@ -82,16 +94,38 @@ export function UploadPhotosButton({ eventId, uploadedBy }: Props) {
 
   return (
     <View style={styles.wrap}>
-      <Button 
-        onPress={pickAndUpload} 
+      <Button
+        variant="primary"
+        size="lg"
+        onPress={pickAndUpload}
         disabled={uploading}
         loading={uploading}
-        variant="primary"
-        size="sm"
-        iconL="upload"
+        iconLeft={
+          <Upload
+            size={iconSize.md}
+            strokeWidth={1.75}
+            color={colors.grey900}
+          />
+        }
       >
         Upload
       </Button>
+
+      {uploading && queue.length > 0 && (
+        <View style={styles.progressWrap}>
+          <ProgressBar value={uploadProgress} />
+        </View>
+      )}
+
+      {snackbar && (
+        <Snackbar
+          type={snackbar.type}
+          message={snackbar.message}
+          visible
+          duration={3000}
+          onHide={() => setSnackbar(null)}
+        />
+      )}
     </View>
   );
 }
@@ -99,5 +133,9 @@ export function UploadPhotosButton({ eventId, uploadedBy }: Props) {
 const styles = StyleSheet.create({
   wrap: {
     minWidth: 100,
+    gap: spacing[3],
+  },
+  progressWrap: {
+    marginTop: spacing[2],
   },
 });

@@ -4,18 +4,24 @@ import { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { AuthLayout } from '@/components/auth-layout';
+import { ExternalLink } from '@/components/external-link';
 import { SocialAuthButtons } from '@/components/social-auth-buttons';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { Button, Input } from '@/components';
 import { ThemedText } from '@/components/ui/Typography';
-import { Colors, SPACING } from '@/constants/theme';
+import { colors, spacing, typography } from '@/constants/tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function SignInScreen() {
   const router = useRouter();
   const { signIn, setActive, isLoaded } = useSignIn();
   const colorScheme = useColorScheme() ?? 'light';
-  const theme = Colors[colorScheme];
+  const isDark = colorScheme === 'dark';
+  const theme = {
+    primary: colors.primary,
+    error: colors.error,
+    border: isDark ? colors.darkBorder : colors.grey200,
+    textSecondary: colors.grey400,
+  };
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -68,10 +74,10 @@ export default function SignInScreen() {
       />
 
       {/* Forgot Password Link - Aligned Right */}
-      <View style={{ alignItems: 'flex-end', marginTop: -SPACING.sm, marginBottom: SPACING.xl }}>
+      <View style={[styles.linkWrap, { marginTop: -spacing[3], marginBottom: spacing[8] }]}>
         <Link href="/(auth)/reset-password" asChild>
           <TouchableOpacity>
-            <ThemedText style={{ color: theme.primary, fontSize: 13, fontWeight: '600' }}>
+            <ThemedText style={[styles.link, { color: theme.primary }]}>
               Forgot Password
             </ThemedText>
           </TouchableOpacity>
@@ -81,6 +87,13 @@ export default function SignInScreen() {
       {error ? (
         <ThemedText style={[styles.error, { color: theme.error }]}>{error}</ThemedText>
       ) : null}
+
+      <Text style={[styles.terms, { marginBottom: spacing[4] }]}>
+        By continuing you agree to our{' '}
+        <ExternalLink href="https://snapsy.app/terms">Terms of Service</ExternalLink>
+        {' '}and{' '}
+        <ExternalLink href="https://snapsy.app/privacy">Privacy Policy</ExternalLink>
+      </Text>
 
       <Button
         onPress={onSignIn}
@@ -93,18 +106,18 @@ export default function SignInScreen() {
       {/* Divider */}
       <View style={styles.divider}>
         <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
-        <ThemedText style={{ color: theme.textSecondary, fontSize: 12 }}>Or login with</ThemedText>
+        <ThemedText style={[styles.dividerText, { color: theme.textSecondary }]}>Or login with</ThemedText>
         <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
       </View>
 
       <SocialAuthButtons onSuccess={() => router.replace('/(tabs)')} disabled={loading} />
 
       {/* Footer Link */}
-      <View style={{ marginTop: SPACING.xxl, alignItems: 'center' }}>
+      <View style={styles.footer}>
         <Link href="/(auth)/sign-up" asChild>
           <TouchableOpacity>
             <ThemedText style={{ color: theme.textSecondary }}>
-              Don't have an account? <Text style={{ color: theme.primary, fontWeight: 'bold' }}>Register</Text>
+              Don't have an account? <Text style={[styles.footerAccent, { color: theme.primary }]}>Register</Text>
             </ThemedText>
           </TouchableOpacity>
         </Link>
@@ -114,18 +127,39 @@ export default function SignInScreen() {
 }
 
 const styles = StyleSheet.create({
+  terms: {
+    fontSize: typography.size.xs,
+    color: colors.grey400,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  linkWrap: { alignItems: 'flex-end' },
+  link: {
+    fontSize: typography.size.md,
+    fontFamily: typography.fontFamily.semibold,
+  },
   error: {
-    marginBottom: SPACING.md,
-    fontSize: 14,
+    marginBottom: spacing[4],
+    fontSize: typography.size.base,
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: SPACING.xl,
-    gap: SPACING.md,
+    marginTop: spacing[8],
+    gap: spacing[4],
   },
   dividerLine: {
     flex: 1,
     height: 1,
+  },
+  dividerText: {
+    fontSize: typography.size.sm,
+  },
+  footer: {
+    marginTop: spacing[12],
+    alignItems: 'center',
+  },
+  footerAccent: {
+    fontFamily: typography.fontFamily.bold,
   },
 });

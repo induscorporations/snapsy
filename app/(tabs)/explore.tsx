@@ -6,28 +6,24 @@ import { ExternalLink } from '@/components/external-link';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Fonts } from '@/constants/theme';
+import { Code2 } from 'lucide-react-native';
+import { colors, spacing, typography } from '@/constants/tokens';
 
 export default function TabTwoScreen() {
   return (
     <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
+      headerBackgroundColor={{ light: colors.grey200, dark: colors.darkSurface2 }}
       headerImage={
-        <IconSymbol
+        <Code2
           size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
+          strokeWidth={1.75}
+          color={colors.grey500}
           style={styles.headerImage}
         />
       }>
       <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}>
-          Explore
+        <ThemedText type="title" style={styles.title}>
+          Discover
         </ThemedText>
       </ThemedView>
       <ThemedText>This app includes example code to help you get started.</ThemedText>
@@ -59,7 +55,7 @@ export default function TabTwoScreen() {
         </ThemedText>
         <Image
           source={require('@/assets/images/react-logo.png')}
-          style={{ width: 100, height: 100, alignSelf: 'center' }}
+          style={styles.reactLogo}
         />
         <ExternalLink href="https://reactnative.dev/docs/images">
           <ThemedText type="link">Learn more</ThemedText>
@@ -80,7 +76,7 @@ export default function TabTwoScreen() {
           This template includes an example of an animated component. The{' '}
           <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
           the powerful{' '}
-          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
+          <ThemedText type="defaultSemiBold" style={styles.mono}>
             react-native-reanimated
           </ThemedText>{' '}
           library to create a waving hand animation.
@@ -100,13 +96,23 @@ export default function TabTwoScreen() {
 
 const styles = StyleSheet.create({
   headerImage: {
-    color: '#808080',
     bottom: -90,
     left: -35,
     position: 'absolute',
   },
   titleContainer: {
     flexDirection: 'row',
-    gap: 8,
+    gap: spacing[2],
+  },
+  title: {
+    fontFamily: typography.fontFamily.bold,
+  },
+  mono: {
+    fontFamily: typography.fontFamily.regular,
+  },
+  reactLogo: {
+    width: 100,
+    height: 100,
+    alignSelf: 'center',
   },
 });

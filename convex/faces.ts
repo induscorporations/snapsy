@@ -29,3 +29,22 @@ export const listByUser = query({
       .collect();
   },
 });
+
+export const getUserFace = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity?.subject) return null;
+
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_clerk_id', (q: any) => q.eq('clerkId', identity.subject))
+      .unique();
+    if (!user) return null;
+
+    return await ctx.db
+      .query('faces')
+      .withIndex('by_user', (q) => q.eq('userId', user._id))
+      .unique();
+  },
+});
