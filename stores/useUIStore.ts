@@ -12,6 +12,11 @@ type UIStore = {
   hydrateOnboarding: () => Promise<void>;
   uploadSuccessSnackbar: boolean;
   setUploadSuccessSnackbar: (v: boolean) => void;
+  errorToast: string | null;
+  setErrorToast: (message: string | null) => void;
+  /** Show "New photos of you" indicator once per session when user has matched photos. */
+  hasShownNewPhotosIndicator: boolean;
+  setHasShownNewPhotosIndicator: (v: boolean) => void;
 };
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -33,4 +38,8 @@ export const useUIStore = create<UIStore>((set) => ({
   },
   uploadSuccessSnackbar: false,
   setUploadSuccessSnackbar: (v: boolean) => set({ uploadSuccessSnackbar: v }),
+  errorToast: null,
+  setErrorToast: (message) => set({ errorToast: message }),
+  hasShownNewPhotosIndicator: false,
+  setHasShownNewPhotosIndicator: (v) => set({ hasShownNewPhotosIndicator: v }),
 }));

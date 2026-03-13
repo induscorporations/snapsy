@@ -12,3 +12,12 @@ export function createPlaceholderEmbedding(): number[] {
   }
   return arr;
 }
+
+/**
+ * Placeholder selfie validation. Replace with ML Kit face detection when integrating.
+ * Returns 'ok' to allow save, or 'no_face' / 'multiple_faces' to block and show retake prompts.
+ */
+export async function validateSelfieForFace(_uri: string): Promise<'ok' | 'no_face' | 'multiple_faces'> {
+  await new Promise((r) => setTimeout(r, 300));
+  return 'ok';
+}

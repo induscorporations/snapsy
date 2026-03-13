@@ -48,3 +48,27 @@ export const getUserFace = query({
       .unique();
   },
 });
+
+/** Delete all face embeddings for the current user. */
+export const deleteMyFaces = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity?.subject) throw new Error('Unauthorized');
+
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_clerk_id', (q: any) => q.eq('clerkId', identity.subject))
+      .unique();
+    if (!user) throw new Error('User not found');
+
+    const faces = await ctx.db
+      .query('faces')
+      .withIndex('by_user', (q) => q.eq('userId', user._id))
+      .collect();
+    for (const f of faces) {
+      await ctx.db.delete(f._id);
+    }
+    return { deleted: faces.length };
+  },
+});

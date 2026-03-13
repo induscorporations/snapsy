@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, useWindowDimensions, Alert, StatusBar, Share } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { useQuery, useMutation } from 'convex/react';
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
@@ -25,6 +26,8 @@ export default function ModalScreen() {
   const { width, height } = useWindowDimensions();
   const [saving, setSaving] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
   const hideFromMyPhotos = useMutation(api.photoMatches.hideFromMyPhotos);
   const deletePhoto = useMutation(api.photos.deletePhoto);
 
@@ -50,6 +53,22 @@ export default function ModalScreen() {
     }
   }, [canGoNext, currentIndex, photoIds, photoIdsParam, router]);
 
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((e) => {
+      scale.value = savedScale.value * e.scale;
+    })
+    .onEnd(() => {
+      if (scale.value < 1) {
+        scale.value = withSpring(1, { damping: 15 });
+        savedScale.value = 1;
+      } else if (scale.value > 4) {
+        scale.value = withSpring(4, { damping: 15 });
+        savedScale.value = 4;
+      } else {
+        savedScale.value = scale.value;
+      }
+    });
+
   const panGesture = Gesture.Pan()
     .onEnd((e) => {
       const { translationY, velocityY, translationX, velocityX } = e;
@@ -60,11 +79,25 @@ export default function ModalScreen() {
       if (photoIds.length > 0) {
         if (translationX < -SWIPE_THRESHOLD || velocityX < -VELOCITY_THRESHOLD) {
           goNext();
+          scale.value = withSpring(1);
+          savedScale.value = 1;
         } else if (translationX > SWIPE_THRESHOLD || velocityX > VELOCITY_THRESHOLD) {
           goPrev();
+          scale.value = withSpring(1);
+          savedScale.value = 1;
         }
       }
     });
+
+  useEffect(() => {
+    scale.value = 1;
+    savedScale.value = 1;
+  }, [photoId]);
+
+  const composed = Gesture.Simultaneous(pinchGesture, panGesture);
+  const animatedImageStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
   const handleNotMe = async () => {
     if (!photoId || !convexUserId) return;
@@ -146,15 +179,17 @@ export default function ModalScreen() {
         />
       </View>
 
-      <GestureDetector gesture={panGesture}>
+      <GestureDetector gesture={composed}>
         <View style={styles.viewer}>
           {photo?.url ? (
-            <ExpoImage
-              source={{ uri: photo.url }}
-              style={[styles.image, { width, height: height * 0.7 }]}
-              contentFit="contain"
-              transition={200}
-            />
+            <Animated.View style={[styles.imageWrap, { width, height: height * 0.7 }, animatedImageStyle]}>
+              <ExpoImage
+                source={{ uri: photo.url }}
+                style={[styles.image, { width, height: height * 0.7 }]}
+                contentFit="contain"
+                transition={200}
+              />
+            </Animated.View>
           ) : (
             <View style={[styles.placeholder, { width, height: height * 0.7 }]} />
           )}
@@ -328,6 +363,10 @@ const styles = StyleSheet.create({
   },
   viewer: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageWrap: {
     justifyContent: 'center',
     alignItems: 'center',
   },

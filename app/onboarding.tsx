@@ -13,6 +13,8 @@ import { useRouter } from 'expo-router';
 import Animated, { FadeInUp, FadeInDown } from 'react-native-reanimated';
 import * as Notifications from 'expo-notifications';
 
+import { useMutation } from 'convex/react';
+import { api } from '@/convex/_generated/api';
 import { useUIStore } from '@/stores/useUIStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { colors, spacing, radii, iconSize } from '@/constants/tokens';
@@ -31,36 +33,36 @@ type SlideType = 'content' | 'notifications' | 'selfie';
 const SLIDES: { id: string; title: string; body: string; icon: IconName; type: SlideType }[] = [
   {
     id: 'welcome',
-    title: 'Your photos,\nonly your face',
-    body: 'No tagging. No scrolling. Photos of you, delivered automatically to your private vault.',
+    title: 'Get only the photos\nthat matter.',
+    body: 'Snapsy automatically delivers photos featuring you.',
     icon: 'camera',
     type: 'content',
   },
   {
     id: 'how-it-works',
-    title: 'Join events.\nGet your pics.',
-    body: 'Hosts upload. Our privacy-first AI finds you. You instantly download what’s yours.',
+    title: 'Upload once.\nWe do the sorting.',
+    body: 'AI recognizes faces and sends photos to the right people.',
     icon: 'zap',
     type: 'content',
   },
   {
     id: 'privacy',
-    title: 'Private by design',
-    body: 'Face matching runs on your device. We never store your face data. 100% encrypted.',
+    title: 'Your face data\nstays private.',
+    body: 'Face recognition runs on your device. We never sell or share your biometric data.',
     icon: 'shield',
     type: 'content',
   },
   {
     id: 'notifications',
-    title: 'Never miss a\nmoment',
-    body: 'Enable notifications to get alerted as soon as your photos are found in an event.',
+    title: 'Stay updated\ninstantly.',
+    body: 'Get notified when new photos of you are available.',
     icon: 'bell',
     type: 'notifications',
   },
   {
     id: 'selfie',
-    title: 'Finish your\nprofile',
-    body: 'Take a quick selfie. This stays on your device and is used to match you in event photos.',
+    title: "Let's find your\nphotos.",
+    body: 'Take a clear selfie to match you across events.',
     icon: 'user',
     type: 'selfie',
   },
@@ -74,6 +76,7 @@ export default function OnboardingScreen() {
   const convexUserId = useAuthStore((s) => s.convexUserId);
   const [hasSelfie, setHasSelfie] = useState(false);
   const [notificationStatus, setNotificationStatus] = useState<Notifications.PermissionStatus | null>(null);
+  const recordOnboardingEvent = useMutation(api.onboardingEvents.record);
 
   useEffect(() => {
     checkNotifications();
@@ -87,6 +90,7 @@ export default function OnboardingScreen() {
   const requestNotifications = async () => {
     const { status } = await Notifications.requestPermissionsAsync();
     setNotificationStatus(status);
+    recordOnboardingEvent({ event: 'push_response', pushAccepted: status === 'granted' }).catch(() => {});
     if (status === 'granted') {
       nextSlide();
     } else {
@@ -104,6 +108,7 @@ export default function OnboardingScreen() {
   };
 
   const nextSlide = () => {
+    recordOnboardingEvent({ event: 'slide_complete', slideIndex: index }).catch(() => {});
     if (index < SLIDES.length - 1) {
       flatRef.current?.scrollToOffset({ offset: width * (index + 1), animated: true });
     } else if (hasSelfie) {

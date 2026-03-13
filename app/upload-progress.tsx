@@ -1,66 +1,47 @@
 import { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, StatusBar, BackHandler } from 'react-native';
+import { View, StyleSheet, StatusBar, BackHandler } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import Animated, { 
-  FadeIn, 
-  FadeInUp, 
-  Layout, 
-  useAnimatedStyle, 
-  withSpring 
-} from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 
-import { colors, spacing, radii, iconSize } from '@/constants/tokens';
+import { colors, spacing, iconSize } from '@/constants/tokens';
 import { ThemedText } from '@/components/ui/Typography';
 import { ProgressBar, Button } from '@/components';
 import { Upload, CheckCircle } from 'lucide-react-native';
 import { useUIStore } from '@/stores/useUIStore';
+import { useUploadStore } from '@/stores/useUploadStore';
 import { BottomSheet } from '@/components/navigation/Navigation';
 
 export default function UploadProgressScreen() {
   const { count = '0' } = useLocalSearchParams<{ count: string }>();
   const router = useRouter();
-  const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState<'uploading' | 'matching' | 'notifying' | 'done'>('uploading');
-  const totalSteps = 100;
+  const queue = useUploadStore((s) => s.queue);
   const setUploadSuccessSnackbar = useUIStore((s) => s.setUploadSuccessSnackbar);
   const [cancelSheetOpen, setCancelSheetOpen] = useState(false);
   const [cancelRequested, setCancelRequested] = useState(false);
 
+  const total = queue.length || Math.max(1, parseInt(count, 10) || 1);
+  const progress = queue.length
+    ? Math.round(queue.reduce((acc, q) => acc + q.progress, 0) / queue.length)
+    : 0;
+  const allDone = queue.length > 0 && queue.every((q) => q.done);
+  const status: 'uploading' | 'matching' | 'notifying' | 'done' = allDone
+    ? 'done'
+    : progress < 40
+      ? 'uploading'
+      : progress < 80
+        ? 'matching'
+        : progress < 100
+          ? 'notifying'
+          : 'done';
+
   useEffect(() => {
-    // Prevent accidentally going back during upload
     const backAction = () => {
-      if (status !== 'done') return true;
+      if (status !== 'done' && !cancelRequested) return true;
       return false;
     };
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
-    
-    // Simulate upload/matching process for MVP premium feel
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          return 100;
-        }
-        if (cancelRequested) {
-          clearInterval(interval);
-          return prev;
-        }
-        return prev + 2;
-      });
-    }, 100);
-
-    return () => {
-      backHandler.remove();
-      clearInterval(interval);
-    };
+    return () => backHandler.remove();
   }, [status, cancelRequested]);
-
-  useEffect(() => {
-    if (progress < 40) setStatus('uploading');
-    else if (progress < 80) setStatus('matching');
-    else if (progress < 100) setStatus('notifying');
-    else setStatus('done');
-  }, [progress]);
 
   return (
     <View style={styles.container}>

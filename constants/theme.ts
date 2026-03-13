@@ -98,12 +98,12 @@ export const RADIUS = {
   full: 9999,
 } as const;
 
-// Typography – Satoshi (Configured for project)
+// Typography – Plus Jakarta Sans (Configured for project)
 export const Fonts = {
-  light: 'Satoshi-Light',
-  regular: 'Satoshi-Regular',
-  medium: 'Satoshi-Medium',
-  bold: 'Satoshi-Bold',
+  light: 'PlusJakartaSans-Light',
+  regular: 'PlusJakartaSans-Regular',
+  medium: 'PlusJakartaSans-Medium',
+  bold: 'PlusJakartaSans-Bold',
   ...Platform.select({
     ios: {
       sans: 'system-ui',

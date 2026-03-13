@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet, Alert, ActionSheetIOS, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { useMutation } from 'convex/react';
 import { useRouter } from 'expo-router';
 import { api } from '@/convex/_generated/api';
@@ -33,36 +34,21 @@ export function UploadPhotosButton({ eventId, uploadedBy }: Props) {
       ? queue.reduce((acc, q) => acc + q.progress, 0) / queue.length
       : 0;
 
-  const pickAndUpload = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Allow access to your photos to upload.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,
-      quality: 0.8,
-    });
-    if (result.canceled || !result.assets?.length) return;
-
-    // Navigate to progress screen immediately for premium feel
+  const runUploadWithAssets = async (assets: { uri: string }[]) => {
+    if (!assets.length) return;
     router.push({
       pathname: '/upload-progress',
-      params: { count: result.assets.length.toString(), eventId }
+      params: { count: assets.length.toString(), eventId },
     });
-
     setUploading(true);
     setSnackbar(null);
     clearQueue();
-    for (const asset of result.assets) {
+    for (const asset of assets) {
       addToQueue(asset.uri);
     }
-
-    // Process uploads in background
     (async () => {
       let hasError = false;
-      for (const asset of result.assets) {
+      for (const asset of assets) {
         try {
           const out = await uploadPhotoFromUri(asset.uri, {
             getUploadUrl: () => generateUploadUrl({ userId: uploadedBy as any }),
@@ -88,8 +74,75 @@ export function UploadPhotosButton({ eventId, uploadedBy }: Props) {
         message: hasError ? 'Upload failed' : 'Photos uploaded',
       });
       setUploading(false);
-      // We don't clear immediately so progress screen can see results if needed
     })();
+  };
+
+  const pickFromGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow access to your photos to upload.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets?.length) return;
+    runUploadWithAssets(result.assets);
+  };
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow camera access to take a photo.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets?.length) return;
+    runUploadWithAssets(result.assets);
+  };
+
+  const pickFromFiles = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'image/*',
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.length) return;
+      runUploadWithAssets(result.assets.map((a) => ({ uri: a.uri })));
+    } catch (e) {
+      Alert.alert('Error', 'Could not open file picker.');
+    }
+  };
+
+  const showUploadSourceSheet = () => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Cancel', 'Take Photo', 'Choose from Gallery', 'Browse files'],
+          cancelButtonIndex: 0,
+        },
+        (i) => {
+          if (i === 1) takePhoto();
+          else if (i === 2) pickFromGallery();
+          else if (i === 3) pickFromFiles();
+        }
+      );
+    } else {
+      Alert.alert(
+        'Add photos',
+        undefined,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Take Photo', onPress: takePhoto },
+          { text: 'Choose from Gallery', onPress: pickFromGallery },
+          { text: 'Browse files', onPress: pickFromFiles },
+        ]
+      );
+    }
   };
 
   return (
@@ -97,7 +150,7 @@ export function UploadPhotosButton({ eventId, uploadedBy }: Props) {
       <Button
         variant="primary"
         size="lg"
-        onPress={pickAndUpload}
+        onPress={showUploadSourceSheet}
         disabled={uploading}
         loading={uploading}
         iconLeft={

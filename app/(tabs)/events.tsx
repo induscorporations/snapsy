@@ -4,11 +4,15 @@ import {
   StyleSheet,
   FlatList,
   StatusBar,
+  TouchableOpacity,
+  Alert,
+  Share,
 } from 'react-native';
+import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
-import { useQuery } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
-import { Calendar, Plus, Link as LinkIcon } from 'lucide-react-native';
+import { Calendar, Plus, Link as LinkIcon, Share2, Trash2, ExternalLink } from 'lucide-react-native';
 
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -18,6 +22,7 @@ import { ThemedText } from '@/components/ui/Typography';
 import { PressableScale } from '@/components/pressable-scale';
 import { CreateEventSheet } from '@/components/create-event-sheet';
 import { JoinEventSheet } from '@/components/join-event-sheet';
+import { BottomSheet } from '@/components/navigation/Navigation';
 
 export default function EventsScreen() {
   const router = useRouter();
@@ -25,6 +30,8 @@ export default function EventsScreen() {
   const setCreateEventSheetOpen = useUIStore((s) => s.setCreateEventSheetOpen);
   const createEventSheetOpen = useUIStore((s) => s.createEventSheetOpen);
   const [joinEventSheetOpen, setJoinEventSheetOpen] = useState(false);
+  const [quickActionEvent, setQuickActionEvent] = useState<any>(null);
+  const deleteEvent = useMutation(api.events.deleteEvent);
 
   const events = useQuery(
     api.events.listByUser,
@@ -76,23 +83,30 @@ export default function EventsScreen() {
           data={events}
           keyExtractor={(item: any) => item._id}
           contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => (
-            <PressableScale onPress={() => router.push(`/event/${item._id}`)}>
-              <Card variant="flat" style={styles.eventCard}>
-                <View style={styles.eventHeader}>
-                  <ThemedText type="headline" darkColor={colors.grey800}>
-                    {item.name}
-                  </ThemedText>
-                </View>
-                <View style={styles.eventMeta}>
-                  <Badge label={item.privacy} variant="default" />
-                  <ThemedText type="small" darkColor={colors.grey400}>
-                    {item.retentionDays}d retention
-                  </ThemedText>
-                </View>
-              </Card>
-            </PressableScale>
-          )}
+          renderItem={({ item }) => {
+            const isHost = item.hostId === convexUserId;
+            return (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => router.push(`/event/${item._id}`)}
+                onLongPress={() => setQuickActionEvent(item)}
+              >
+                <Card variant="flat" style={styles.eventCard}>
+                  <View style={styles.eventHeader}>
+                    <ThemedText type="headline" darkColor={colors.grey800}>
+                      {item.name}
+                    </ThemedText>
+                  </View>
+                  <View style={styles.eventMeta}>
+                    <Badge label={item.privacy} variant="default" />
+                    <ThemedText type="small" darkColor={colors.grey400}>
+                      {item.retentionDays}d retention
+                    </ThemedText>
+                  </View>
+                </Card>
+              </TouchableOpacity>
+            );
+          }}
         />
       ) : (
         <View style={styles.emptyState}>
@@ -150,6 +164,75 @@ export default function EventsScreen() {
         visible={joinEventSheetOpen}
         onClose={() => setJoinEventSheetOpen(false)}
       />
+
+      <BottomSheet
+        visible={!!quickActionEvent}
+        onClose={() => setQuickActionEvent(null)}
+        title={quickActionEvent?.name ?? 'Event'}
+        subtitle="Quick actions"
+        snapHeight={0.4}
+      >
+        {quickActionEvent && (
+          <View style={styles.quickSheetList}>
+            <TouchableOpacity
+              style={styles.quickSheetItem}
+              onPress={() => {
+                router.push(`/event/${quickActionEvent._id}`);
+                setQuickActionEvent(null);
+              }}
+            >
+              <ExternalLink size={iconSize.md} strokeWidth={1.75} color={colors.grey700} />
+              <ThemedText type="body1" darkColor={colors.grey800}>View Event</ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickSheetItem}
+              onPress={async () => {
+                const url = Linking.createURL(`/join?eventId=${quickActionEvent._id}`);
+                try {
+                  await Share.share({
+                    message: `Join my event on Snapsy: ${url}`,
+                    url,
+                    title: 'Snapsy event invite',
+                  });
+                } catch {}
+                setQuickActionEvent(null);
+              }}
+            >
+              <Share2 size={iconSize.md} strokeWidth={1.75} color={colors.grey700} />
+              <ThemedText type="body1" darkColor={colors.grey800}>Share Invite</ThemedText>
+            </TouchableOpacity>
+            {quickActionEvent.hostId === convexUserId && (
+              <TouchableOpacity
+                style={[styles.quickSheetItem, styles.quickSheetItemDanger]}
+                onPress={() => {
+                  Alert.alert(
+                    'Delete event',
+                    `Permanently delete "${quickActionEvent.name}"? All photos and members will be removed.`,
+                    [
+                      { text: 'Cancel', style: 'cancel', onPress: () => setQuickActionEvent(null) },
+                      {
+                        text: 'Delete',
+                        style: 'destructive',
+                        onPress: async () => {
+                          try {
+                            await deleteEvent({ eventId: quickActionEvent._id });
+                            setQuickActionEvent(null);
+                          } catch (e) {
+                            Alert.alert('Error', 'Could not delete event.');
+                          }
+                        },
+                      },
+                    ]
+                  );
+                }}
+              >
+                <Trash2 size={iconSize.md} strokeWidth={1.75} color={colors.error} />
+                <ThemedText type="body1" darkColor={colors.error}>Delete Event</ThemedText>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+      </BottomSheet>
     </View>
   );
 }
@@ -215,5 +298,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing[3],
   },
+  quickSheetList: {
+    gap: spacing[2],
+    paddingVertical: spacing[4],
+  },
+  quickSheetItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[4],
+  },
+  quickSheetItemDanger: {},
 });
 

@@ -14,6 +14,8 @@ import type * as events from "../events.js";
 import type * as expirationReminders from "../expirationReminders.js";
 import type * as faces from "../faces.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as notifications from "../notifications.js";
+import type * as onboardingEvents from "../onboardingEvents.js";
 import type * as photoMatches from "../photoMatches.js";
 import type * as photos from "../photos.js";
 import type * as retention from "../retention.js";
@@ -32,6 +34,8 @@ declare const fullApi: ApiFromModules<{
   expirationReminders: typeof expirationReminders;
   faces: typeof faces;
   "lib/auth": typeof lib_auth;
+  notifications: typeof notifications;
+  onboardingEvents: typeof onboardingEvents;
   photoMatches: typeof photoMatches;
   photos: typeof photos;
   retention: typeof retention;

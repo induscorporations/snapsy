@@ -26,6 +26,8 @@ type UploadStore = {
   addPending: (item: PendingUpload) => void;
   removePending: (uri: string) => void;
   setPendingError: (uri: string, error: string) => void;
+  clearPendingError: (uri: string) => void;
+  retryAllFailed: () => void;
   setPendingQueue: (items: PendingUpload[]) => void;
   hydratePending: () => Promise<void>;
 };
@@ -66,6 +68,18 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
         p.uri === uri ? { ...p, error } : p
       ),
     })),
+  clearPendingError: (uri) =>
+    set((s) => ({
+      pendingQueue: s.pendingQueue.map((p) =>
+        p.uri === uri ? { ...p, error: undefined } : p
+      ),
+    })),
+  retryAllFailed: () =>
+    set((s) => {
+      const next = s.pendingQueue.map((p) => ({ ...p, error: undefined }));
+      persistPending(next);
+      return { pendingQueue: next };
+    }),
   setPendingQueue: (items) => {
     set({ pendingQueue: items });
     persistPending(items);

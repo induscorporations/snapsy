@@ -2,7 +2,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { ClerkProvider, useAuth } from '@clerk/clerk-expo';
 import { ConvexProviderWithClerk } from 'convex/react-clerk';
 import { ConvexReactClient } from 'convex/react';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
@@ -22,6 +22,7 @@ import { getClerkPublishableKey, getConvexUrl } from '@/lib/env';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
 import { colors, typography } from '@/constants/tokens';
+import { GlobalErrorToast } from '@/components/global-error-toast';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -71,22 +72,17 @@ export default function RootLayout() {
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
   const insets = useSafeAreaInsets();
-  const { isSignedIn } = useAuth();
 
   useEffect(() => {
     async function prepare() {
-      // Satoshi (PRD) – loaded from Fonts/WEB/fonts/
+      // Load Plus Jakarta Sans font family from /Fonts (see tokens.ts)
       await Font.loadAsync({
-        'Satoshi-Light': require('../Fonts/WEB/fonts/Satoshi-Light.ttf'),
-        'Satoshi-Regular': require('../Fonts/WEB/fonts/Satoshi-Regular.ttf'),
-        'Satoshi-Medium': require('../Fonts/WEB/fonts/Satoshi-Medium.ttf'),
-        'Satoshi-Bold': require('../Fonts/WEB/fonts/Satoshi-Bold.ttf'),
-        // Plus Jakarta Sans (tokens.ts)
-        'PlusJakartaSans-Regular': require('../Fonts/WEB/fonts/PlusJakartaSans-Regular.ttf'),
-        'PlusJakartaSans-Medium': require('../Fonts/WEB/fonts/PlusJakartaSans-Medium.ttf'),
-        'PlusJakartaSans-SemiBold': require('../Fonts/WEB/fonts/PlusJakartaSans-SemiBold.ttf'),
-        'PlusJakartaSans-Bold': require('../Fonts/WEB/fonts/PlusJakartaSans-Bold.ttf'),
-        'PlusJakartaSans-ExtraBold': require('../Fonts/WEB/fonts/PlusJakartaSans-ExtraBold.ttf'),
+        'PlusJakartaSans-Light': require('../Fonts/PlusJakartaSans-Light.ttf'),
+        'PlusJakartaSans-Regular': require('../Fonts/PlusJakartaSans-Regular.ttf'),
+        'PlusJakartaSans-Medium': require('../Fonts/PlusJakartaSans-Medium.ttf'),
+        'PlusJakartaSans-SemiBold': require('../Fonts/PlusJakartaSans-SemiBold.ttf'),
+        'PlusJakartaSans-Bold': require('../Fonts/PlusJakartaSans-Bold.ttf'),
+        'PlusJakartaSans-ExtraBold': require('../Fonts/PlusJakartaSans-ExtraBold.ttf'),
       });
       setFontsLoaded(true);
     }
@@ -108,15 +104,6 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (!isSignedIn) return;
-
-    registerForPushNotifications().then((token) => {
-      if (!token) return;
-      convex.mutation('users:storePushToken', { token }).catch(() => {
-        // Swallow errors for now; token storage is best-effort
-      });
-    });
-
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
         shouldShowAlert: true,
@@ -124,7 +111,18 @@ export default function RootLayout() {
         shouldSetBadge: false,
       }),
     });
-  }, [isSignedIn]);
+  }, []);
+
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as { eventId?: string; screen?: string };
+      const eventId = data?.eventId;
+      if (eventId && typeof eventId === 'string') {
+        router.push(`/event/${eventId}`);
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   if (!appReady) {
     return null;
@@ -219,8 +217,11 @@ export default function RootLayout() {
             <Stack.Screen name="join" options={{ headerShown: false }} />
             <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
             <Stack.Screen name="settings" options={{ headerShown: false }} />
+            <Stack.Screen name="privacy" options={{ headerShown: false }} />
             <Stack.Screen name="face-setup" options={{ headerShown: false }} />
+            <Stack.Screen name="no-face" options={{ headerShown: false }} />
           </Stack>
+            <GlobalErrorToast />
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
           </ThemeProvider>
         </ConvexProviderWithClerk>

@@ -193,7 +193,7 @@ export function CreateEventSheet({ open, onClose, convexUserId }: Props) {
                           },
                         ]}
                       >
-                        {p === 'invite_only' ? 'Invite Only' : 'Public Link'}
+                        {p === 'invite_only' ? 'Private' : 'Public'}
                       </ThemedText>
                     </TouchableOpacity>
                   ))}

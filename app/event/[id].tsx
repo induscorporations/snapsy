@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -16,14 +16,19 @@ import { useQuery, useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import { Image as ExpoImage } from 'expo-image';
 
+import * as FileSystem from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { useUploadStore } from '@/stores/useUploadStore';
 import { Snackbar, EmptyState } from '@/components/feedback/Feedback';
 import { BottomSheet } from '@/components/navigation/Navigation';
 import { UploadPhotosButton } from '@/components/upload-photos-button';
 import { colors, spacing, radii, typography } from '@/constants/tokens';
 import { ThemedText } from '@/components/ui/Typography';
 import { Button } from '@/components';
+import * as Linking from 'expo-linking';
+import { Share } from 'react-native';
 import {
   ArrowLeft,
   User,
@@ -33,6 +38,10 @@ import {
   UserMinus,
   Clock,
   ShieldOff,
+  Check,
+  Trash2,
+  Download,
+  MoreHorizontal,
 } from 'lucide-react-native';
 
 export default function EventScreen() {
@@ -45,6 +54,14 @@ export default function EventScreen() {
   const setUploadSuccessSnackbar = useUIStore((s) => s.setUploadSuccessSnackbar);
   const [showUploadSnackbar, setShowUploadSnackbar] = useState(false);
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<string>>(new Set());
+  const [photoActionPhoto, setPhotoActionPhoto] = useState<any | null>(null);
+  const [bulkSheetOpen, setBulkSheetOpen] = useState(false);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const pendingQueue = useUploadStore((s) => s.pendingQueue);
+  const retryAllFailed = useUploadStore((s) => s.retryAllFailed);
+  const failedCount = pendingQueue.filter((p) => p.error).length;
 
   const event = useQuery(
     api.events.get,
@@ -54,9 +71,13 @@ export default function EventScreen() {
     api.photos.listByEvent,
     id ? { eventId: id as any, userId: convexUserId as any } : 'skip'
   );
-  const myPhotosWithUrls = useQuery(
-    api.photoMatches.getMatchedPhotosWithUrls,
-    convexUserId && id ? { userId: convexUserId as any, eventId: id as any } : 'skip'
+  const [myPhotosCursor, setMyPhotosCursor] = useState<string | null | undefined>(undefined);
+  const [myPhotosAccumulated, setMyPhotosAccumulated] = useState<any[]>([]);
+  const myPhotosPaginated = useQuery(
+    (api as any).photoMatches.getMatchedPhotosWithUrlsPaginated,
+    convexUserId && id
+      ? { userId: convexUserId as any, eventId: id as any, limit: 24, cursor: myPhotosCursor ?? undefined }
+      : 'skip'
   );
   const members = useQuery(
     (api as any).eventMembers.listByEvent,
@@ -65,6 +86,8 @@ export default function EventScreen() {
 
   const removeMember = useMutation((api as any).eventMembers.remove);
   const updateRole = useMutation((api as any).eventMembers.updateRole);
+  const deletePhotoMutation = useMutation(api.photos.deletePhoto);
+  const recordDownload = useMutation(api.photos.recordDownload);
 
   const isHost = event?.hostId === convexUserId;
   const memberCount = (event as any)?.memberCount ?? members?.length ?? 0;
@@ -74,18 +97,49 @@ export default function EventScreen() {
     ? Math.max(0, event.retentionDays - daysSinceCreation)
     : 0;
   const isExpired = daysLeft <= 0;
+  const myPhotosLastCursorRef = useRef<string | null | undefined>(null);
   const photos =
-    tab === 'my' && myPhotosWithUrls
-      ? myPhotosWithUrls
+    tab === 'my'
+      ? myPhotosAccumulated
       : (allPhotos ?? []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    // Convex queries auto-update reactively, but we add a small delay
-    // to give visual feedback for the pull-to-refresh interaction.
+    if (tab === 'my') {
+      setMyPhotosCursor(undefined);
+      setMyPhotosAccumulated([]);
+      myPhotosLastCursorRef.current = null;
+    }
     await new Promise((resolve) => setTimeout(resolve, 800));
     setRefreshing(false);
-  }, []);
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== 'all') {
+      setBulkMode(false);
+      setSelectedPhotoIds(new Set());
+      setBulkSheetOpen(false);
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    if (id) {
+      setMyPhotosCursor(undefined);
+      setMyPhotosAccumulated([]);
+      myPhotosLastCursorRef.current = null;
+    }
+  }, [id]);
+
+  useEffect(() => {
+    if (tab !== 'my' || !myPhotosPaginated) return;
+    if (myPhotosCursor === undefined || myPhotosCursor === null) {
+      setMyPhotosAccumulated(myPhotosPaginated.items);
+      myPhotosLastCursorRef.current = myPhotosCursor;
+    } else if (myPhotosLastCursorRef.current !== myPhotosCursor) {
+      setMyPhotosAccumulated((prev) => [...prev, ...myPhotosPaginated.items]);
+      myPhotosLastCursorRef.current = myPhotosCursor;
+    }
+  }, [tab, myPhotosPaginated, myPhotosCursor]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -117,6 +171,108 @@ export default function EventScreen() {
     } catch (e) {
       Alert.alert('Error', 'Could not update role.');
     }
+  };
+
+  const togglePhotoSelection = (photoId: string) => {
+    setSelectedPhotoIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(photoId)) next.delete(photoId);
+      else next.add(photoId);
+      return next;
+    });
+  };
+
+  const exitBulkMode = () => {
+    setBulkMode(false);
+    setSelectedPhotoIds(new Set());
+    setBulkSheetOpen(false);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedPhotoIds.size === 0 || !convexUserId) return;
+    setBulkActionLoading(true);
+    try {
+      for (const pid of selectedPhotoIds) {
+        await deletePhotoMutation({ photoId: pid as any });
+      }
+      exitBulkMode();
+    } catch (e) {
+      Alert.alert('Error', 'Could not delete some photos.');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkDownload = async () => {
+    if (selectedPhotoIds.size === 0 || !convexUserId) return;
+    const { status } = await MediaLibrary.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow access to save photos to your device.');
+      return;
+    }
+    setBulkActionLoading(true);
+    let saved = 0;
+    try {
+      for (const pid of selectedPhotoIds) {
+        const p = (photos as any[]).find((x) => x._id === pid);
+        if (!p?.url) continue;
+        const filename = `snapsy-${pid}.jpg`;
+        const localUri = `${(FileSystem as any).cacheDirectory}${filename}`;
+        await FileSystem.downloadAsync(p.url, localUri);
+        await MediaLibrary.createAssetAsync(localUri);
+        await recordDownload({ photoId: pid as any, userId: convexUserId as any });
+        saved++;
+      }
+      exitBulkMode();
+      if (saved > 0) Alert.alert('Saved', `${saved} photo${saved !== 1 ? 's' : ''} saved to your library.`);
+    } catch (e) {
+      Alert.alert('Download failed', e instanceof Error ? e.message : 'Could not save photos.');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleSinglePhotoDownload = async (item: any) => {
+    if (!item?.url || !convexUserId) return;
+    const { status } = await MediaLibrary.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow access to save photos to your device.');
+      return;
+    }
+    try {
+      const filename = `snapsy-${item._id}.jpg`;
+      const localUri = `${(FileSystem as any).cacheDirectory}${filename}`;
+      await FileSystem.downloadAsync(item.url, localUri);
+      await MediaLibrary.createAssetAsync(localUri);
+      await recordDownload({ photoId: item._id, userId: convexUserId });
+      setPhotoActionPhoto(null);
+      Alert.alert('Saved', 'Photo saved to your library.');
+    } catch (e) {
+      Alert.alert('Download failed', e instanceof Error ? e.message : 'Could not save photo.');
+    }
+  };
+
+  const handleSinglePhotoDelete = async (item: any) => {
+    if (!item?._id) return;
+    Alert.alert(
+      'Delete photo',
+      'This will permanently delete this photo for everyone in the event. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deletePhotoMutation({ photoId: item._id });
+              setPhotoActionPhoto(null);
+            } catch (e) {
+              Alert.alert('Error', 'Could not delete photo.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const { width } = useWindowDimensions();
@@ -167,9 +323,21 @@ export default function EventScreen() {
               {memberCount} member{memberCount !== 1 ? 's' : ''} · {daysLeft}d left
             </ThemedText>
           </View>
-          {isHost && convexUserId && tab !== 'members' && !isExpired && (
-            <UploadPhotosButton eventId={id} uploadedBy={convexUserId} />
-          )}
+          <View style={styles.headerActions}>
+            {isHost && tab === 'all' && !isExpired && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onPress={() => (bulkMode ? exitBulkMode() : setBulkMode(true))}
+                style={styles.selectBtn}
+              >
+                {bulkMode ? 'Cancel' : 'Select'}
+              </Button>
+            )}
+            {isHost && convexUserId && tab !== 'members' && !isExpired && (
+              <UploadPhotosButton eventId={id} uploadedBy={convexUserId} />
+            )}
+          </View>
         </View>
       </View>
 
@@ -183,6 +351,37 @@ export default function EventScreen() {
           >
             This event's photos have expired and been removed.
           </ThemedText>
+          <View style={styles.expiredActions}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onPress={() => {
+                const url = Linking.createURL(`/join?eventId=${id}`);
+                Share.share({
+                  message: `Request access to "${event?.name}" on Snapsy: ${url}`,
+                  url,
+                  title: 'Snapsy event invite',
+                }).catch(() => {});
+              }}
+              style={styles.expiredBtn}
+            >
+              Contact host
+            </Button>
+            <Button variant="ghost" size="sm" onPress={() => router.back()} style={styles.expiredBtn}>
+              Dismiss
+            </Button>
+          </View>
+        </View>
+      )}
+
+      {failedCount > 0 && (
+        <View style={styles.retryBanner}>
+          <ThemedText type="caption" darkColor={colors.white} style={styles.retryText}>
+            {failedCount} upload{failedCount !== 1 ? 's' : ''} failed.
+          </ThemedText>
+          <Button variant="ghost" size="sm" onPress={() => retryAllFailed()} style={styles.retryBtn}>
+            Retry
+          </Button>
         </View>
       )}
 
@@ -269,6 +468,12 @@ export default function EventScreen() {
           contentContainerStyle={styles.grid}
           columnWrapperStyle={styles.row}
           showsVerticalScrollIndicator={false}
+          onEndReached={
+            tab === 'my' && myPhotosPaginated?.nextCursor
+              ? () => setMyPhotosCursor(myPhotosPaginated.nextCursor)
+              : undefined
+          }
+          onEndReachedThreshold={0.4}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -285,6 +490,8 @@ export default function EventScreen() {
           }
           renderItem={({ item, index }) => {
             const photo = item && typeof item === 'object' && 'url' in item ? (item as any) : { ...item, url: null as string | null };
+            const isSelected = bulkMode && selectedPhotoIds.has(item._id);
+            const isHostAllTab = isHost && tab === 'all';
             return (
               <Animated.View
                 entering={FadeIn.delay(index * 40).duration(200)}
@@ -292,7 +499,19 @@ export default function EventScreen() {
               >
                 <TouchableOpacity
                   style={styles.thumbInner}
-                  onPress={() => router.push({ pathname: '/modal', params: { photoId: item._id, photoIds: photos.map((p) => p._id).join(',') } })}
+                  onPress={() => {
+                    if (bulkMode && isHostAllTab) {
+                      togglePhotoSelection(item._id);
+                    } else {
+                      router.push({ pathname: '/modal', params: { photoId: item._id, photoIds: photos.map((p) => p._id).join(',') } });
+                    }
+                  }}
+                  onLongPress={() => {
+                    if (isHostAllTab && !bulkMode) {
+                      setPhotoActionPhoto(item);
+                    }
+                  }}
+                  activeOpacity={0.8}
                 >
                   {photo.url ? (
                     <ExpoImage 
@@ -303,6 +522,11 @@ export default function EventScreen() {
                     />
                   ) : (
                     <View style={styles.thumbPlaceholder} />
+                  )}
+                  {bulkMode && isHostAllTab && (
+                    <View style={[styles.selectOverlay, isSelected && styles.selectOverlaySelected]}>
+                      {isSelected && <Check size={28} color={colors.white} strokeWidth={2.5} />}
+                    </View>
                   )}
                 </TouchableOpacity>
               </Animated.View>
@@ -330,6 +554,101 @@ export default function EventScreen() {
             }
           />
         </View>
+      )}
+
+      {bulkMode && selectedPhotoIds.size > 0 && (
+        <View style={styles.bulkBar}>
+          <ThemedText type="body2" darkColor={colors.white}>
+            {selectedPhotoIds.size} selected
+          </ThemedText>
+          <View style={styles.bulkBarActions}>
+            <Button variant="ghost" size="sm" onPress={() => setBulkSheetOpen(true)} style={styles.bulkBarBtn}>
+              Delete
+            </Button>
+            <Button variant="primary" size="sm" onPress={handleBulkDownload} loading={bulkActionLoading} style={styles.bulkBarBtn}>
+              Download
+            </Button>
+          </View>
+        </View>
+      )}
+
+      {bulkSheetOpen && (
+        <BottomSheet
+          visible={bulkSheetOpen}
+          onClose={() => setBulkSheetOpen(false)}
+          title="Bulk actions"
+          snapHeight={0.28}
+        >
+          <View style={styles.sheetList}>
+            <TouchableOpacity
+              style={styles.sheetItem}
+              onPress={() => {
+                setBulkSheetOpen(false);
+                Alert.alert(
+                  'Delete photos',
+                  `Permanently delete ${selectedPhotoIds.size} photo${selectedPhotoIds.size !== 1 ? 's' : ''} for everyone in this event?`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Delete', style: 'destructive', onPress: () => handleBulkDelete() },
+                  ]
+                );
+              }}
+              disabled={bulkActionLoading}
+            >
+              <Trash2 size={18} strokeWidth={1.75} color={colors.error} />
+              <ThemedText type="body1" darkColor={colors.error}>Delete {selectedPhotoIds.size} photo{selectedPhotoIds.size !== 1 ? 's' : ''}</ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.sheetItem}
+              onPress={() => { setBulkSheetOpen(false); handleBulkDownload(); }}
+              disabled={bulkActionLoading}
+            >
+              <Download size={18} strokeWidth={1.75} color={colors.primary} />
+              <ThemedText type="body1" darkColor={colors.primary}>Download {selectedPhotoIds.size} photo{selectedPhotoIds.size !== 1 ? 's' : ''}</ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.sheetItem} onPress={() => setBulkSheetOpen(false)}>
+              <ThemedText type="body1" darkColor={colors.grey700}>Cancel</ThemedText>
+            </TouchableOpacity>
+          </View>
+        </BottomSheet>
+      )}
+
+      {photoActionPhoto && (
+        <BottomSheet
+          visible={!!photoActionPhoto}
+          onClose={() => setPhotoActionPhoto(null)}
+          title="Photo"
+          snapHeight={0.28}
+        >
+          <View style={styles.sheetList}>
+            <TouchableOpacity
+              style={styles.sheetItem}
+              onPress={() => {
+                router.push({ pathname: '/modal', params: { photoId: photoActionPhoto._id, photoIds: photos.map((p: any) => p._id).join(',') } });
+                setPhotoActionPhoto(null);
+              }}
+            >
+              <ThemedText type="body1" darkColor={colors.white}>View</ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.sheetItem}
+              onPress={() => handleSinglePhotoDownload(photoActionPhoto)}
+            >
+              <Download size={18} strokeWidth={1.75} color={colors.primary} />
+              <ThemedText type="body1" darkColor={colors.primary}>Download</ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.sheetItem}
+              onPress={() => handleSinglePhotoDelete(photoActionPhoto)}
+            >
+              <Trash2 size={18} strokeWidth={1.75} color={colors.error} />
+              <ThemedText type="body1" darkColor={colors.error}>Delete photo</ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.sheetItem} onPress={() => setPhotoActionPhoto(null)}>
+              <ThemedText type="body1" darkColor={colors.grey700}>Cancel</ThemedText>
+            </TouchableOpacity>
+          </View>
+        </BottomSheet>
       )}
 
       {isHost && selectedMember && selectedMember.userId !== convexUserId && (
@@ -418,6 +737,41 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: spacing[3],
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  selectBtn: {
+    minWidth: 64,
+  },
+  bulkBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing[6],
+    paddingVertical: spacing[3],
+    backgroundColor: colors.darkSurface2,
+    borderTopWidth: 1,
+    borderTopColor: colors.darkSurface2,
+  },
+  bulkBarActions: {
+    flexDirection: 'row',
+    gap: spacing[2],
+  },
+  bulkBarBtn: {
+    minWidth: 80,
+  },
+  selectOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.md,
+  },
+  selectOverlaySelected: {
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
   tabsContainer: {
     paddingHorizontal: spacing[6],
     marginBottom: spacing[4],
@@ -445,14 +799,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[5],
     paddingVertical: spacing[3],
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing[2],
+  },
+  expiredActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    marginLeft: 'auto',
+  },
+  expiredBtn: {
+    minWidth: 80,
   },
   expiredText: {
     color: colors.warning,
     fontSize: typography.size.sm,
     fontFamily: typography.fontFamily.medium,
     flex: 1,
+  },
+  retryBanner: {
+    backgroundColor: colors.errorDark,
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[3],
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing[2],
+  },
+  retryText: {
+    color: colors.white,
+    fontSize: typography.size.sm,
+    fontFamily: typography.fontFamily.medium,
+    flex: 1,
+  },
+  retryBtn: {
+    minWidth: 64,
   },
   grid: {
     paddingHorizontal: spacing[6],

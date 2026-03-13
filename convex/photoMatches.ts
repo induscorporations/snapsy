@@ -112,6 +112,49 @@ export const hideFromMyPhotos = mutation({
   },
 });
 
+/**
+ * Paginated matched photos for a user in an event (for infinite scroll).
+ * Returns { items, nextCursor } where nextCursor is set if there are more.
+ */
+export const getMatchedPhotosWithUrlsPaginated = query({
+  args: {
+    userId: v.id('users'),
+    eventId: v.id('events'),
+    limit: v.optional(v.number()),
+    cursor: v.optional(v.id('photos')),
+  },
+  handler: async (ctx, { userId, eventId, limit = 24, cursor }) => {
+    const callerId = await getConvexUserId(ctx) ?? userId;
+    if (userId !== callerId) throw new Error('Forbidden: can only list your own matched photos');
+    await requireEventMember(ctx, eventId);
+    const matches = await ctx.db
+      .query('photoMatches')
+      .withIndex('by_user', (q) => q.eq('userId', userId))
+      .collect();
+    const photos = await Promise.all(matches.map((m) => ctx.db.get(m.photoId)));
+    const valid = photos.filter(Boolean) as NonNullable<(typeof photos)[0]>[];
+    const forEvent = valid.filter((p) => p.eventId === eventId).sort((a, b) => b.createdAt - a.createdAt);
+    let startIndex = 0;
+    if (cursor) {
+      const idx = forEvent.findIndex((p) => p._id === cursor);
+      if (idx >= 0) startIndex = idx + 1;
+    }
+    const page = forEvent.slice(startIndex, startIndex + limit + 1);
+    const hasMore = page.length > limit;
+    const items = page.slice(0, limit);
+    const withUrls = await Promise.all(
+      items.map(async (p) => ({
+        ...p,
+        url: await ctx.storage.getUrl(p.storageId as import('./_generated/dataModel').Id<'_storage'>),
+      }))
+    );
+    return {
+      items: withUrls,
+      nextCursor: hasMore ? items[items.length - 1]._id : null,
+    };
+  },
+});
+
 /** All matched photos for a user with URLs (for global "Photos of You" screen). */
 export const getAllMatchedPhotosWithUrls = query({
   args: { userId: v.id('users') },

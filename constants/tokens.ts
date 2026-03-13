@@ -34,11 +34,12 @@ export const colors = {
   info:         '#2196F3',
   infoLight:    '#E3F2FD',
 
-  // Dark mode surfaces
-  darkBg:       '#0F110F',
-  darkSurface:  '#1C1F1C',
-  darkSurface2: '#2E322E',
-  darkBorder:   '#3A3E3A',
+  // App surfaces (Snapsy is light-only)
+  // These keys keep their names for compatibility but now map to light values.
+  darkBg:       '#F7F8F7', // use light background instead of true dark
+  darkSurface:  '#FFFFFF',
+  darkSurface2: '#EFF0EF',
+  darkBorder:   '#D9DBD9',
 } as const;
 
 // 8pt grid — base unit is 4px

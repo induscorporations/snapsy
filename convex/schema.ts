@@ -71,4 +71,14 @@ export default defineSchema({
   })
     .index('by_user', ['userId'])
     .index('by_event_user', ['eventId', 'userId']),
+
+  onboardingEvents: defineTable({
+    userId: v.id('users'),
+    event: v.string(),
+    slideIndex: v.optional(v.number()),
+    pushAccepted: v.optional(v.boolean()),
+    selfieSuccess: v.optional(v.boolean()),
+    retakeCount: v.optional(v.number()),
+    createdAt: v.number(),
+  }).index('by_user', ['userId']),
 });

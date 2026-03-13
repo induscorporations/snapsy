@@ -73,7 +73,7 @@ export default function SettingsScreen() {
               title="Privacy"
               subtitle="Face data, visibility"
               trailing={<ChevronRight size={iconSize.sm} strokeWidth={1.75} color={colors.grey400} />}
-              onPress={() => {}}
+              onPress={() => router.push('/privacy')}
             />
             <ListItem
               icon={() => <Clock size={iconSize.md} strokeWidth={1.75} color={colors.grey700} />}
@@ -161,18 +161,6 @@ export default function SettingsScreen() {
           </Card>
 
           <View style={styles.sheetButtons}>
-            <Button
-              variant="destructive"
-              fullWidth
-              onPress={() => {
-                if (!deleting) {
-                  // step 1 explanatory button; confirm input always visible
-                }
-              }}
-            >
-              Delete My Account
-            </Button>
-
             <View style={styles.confirmWrap}>
               <Input
                 placeholder='Type "DELETE" to confirm'

@@ -8,12 +8,14 @@ import {
   Image,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 
-import { createPlaceholderEmbedding } from '@/lib/embedding';
+import { createPlaceholderEmbedding, validateSelfieForFace } from '@/lib/embedding';
 import { PressableScale } from '@/components/pressable-scale';
+import { BottomSheet } from '@/components/navigation/Navigation';
 import { Colors, SPACING, RADIUS, PRIMARY, BACKGROUND_DARK, G400, G700, G800 } from '@/constants/theme';
 import { Button } from '@/components/ui/Button';
 import { ThemedText } from '@/components/ui/Typography';
@@ -26,24 +28,39 @@ type Props = {
 };
 
 export function SelfiePicker({ userId, onSaved, variant = 'default' }: Props) {
+  const router = useRouter();
   const cameraRef = useRef<CameraView | null>(null);
   const [saving, setSaving] = useState(false);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const [faceErrorSheet, setFaceErrorSheet] = useState<'no_face' | 'multiple_faces' | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const saveFace = useMutation(api.faces.save);
+  const recordOnboardingEvent = useMutation(api.onboardingEvents.record);
 
   const handleSave = async () => {
     if (!previewUri) return;
     setSaving(true);
     try {
-      // In a real app, this is where we'd run face detection/embedding on-device.
-      // For MVP, we simulate the processing time for a "premium" feel.
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
+      const validation = await validateSelfieForFace(previewUri);
+      if (validation === 'no_face') {
+        setSaving(false);
+        router.push({ pathname: '/no-face', params: { reason: 'no_face' } });
+        return;
+      }
+      if (validation === 'multiple_faces') {
+        setSaving(false);
+        router.push({ pathname: '/no-face', params: { reason: 'multiple_faces' } });
+        return;
+      }
+
+      // In a real app, this is where we'd run face embedding on-device.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
       const embedding = createPlaceholderEmbedding();
       await saveFace({ userId, embedding });
+      recordOnboardingEvent({ event: 'selfie_success', selfieSuccess: true }).catch(() => {});
       onSaved?.();
-      
+
       if (variant !== 'onboarding') {
         Alert.alert('Done', 'Your selfie is saved. Photos of you will be matched to events you join.');
       }
@@ -169,6 +186,34 @@ export function SelfiePicker({ userId, onSaved, variant = 'default' }: Props) {
           </ThemedText>
         </TouchableOpacity>
       </View>
+
+      <BottomSheet
+        visible={faceErrorSheet !== null}
+        onClose={() => setFaceErrorSheet(null)}
+        title={faceErrorSheet === 'no_face' ? 'No face detected' : 'Multiple faces'}
+        subtitle={
+          faceErrorSheet === 'no_face'
+            ? "We couldn't detect a clear face. Try again in better lighting."
+            : 'Make sure only you are in the frame.'
+        }
+        snapHeight={0.35}
+      >
+        <View style={styles.sheetActions}>
+          <Button
+            variant="primary"
+            fullWidth
+            onPress={() => {
+              setFaceErrorSheet(null);
+              setPreviewUri(null);
+            }}
+          >
+            Retake photo
+          </Button>
+          <Button variant="ghost" fullWidth onPress={() => setFaceErrorSheet(null)}>
+            Cancel
+          </Button>
+        </View>
+      </BottomSheet>
     </View>
   );
 }
@@ -224,6 +269,10 @@ const styles = StyleSheet.create({
   },
   libraryLink: {
     marginTop: SPACING.md,
+  },
+  sheetActions: {
+    gap: SPACING.md,
+    paddingVertical: SPACING.md,
   },
   permissionContainer: {
     alignItems: 'center',

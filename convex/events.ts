@@ -28,6 +28,24 @@ export const create = mutation({
   },
 });
 
+export const listHostedByUser = query({
+  args: { userId: v.id('users') },
+  handler: async (ctx, { userId }) => {
+    const callerId = await getConvexUserId(ctx) ?? userId;
+    if (userId !== callerId) throw new Error('Forbidden: can only list your own events');
+    const events = await ctx.db
+      .query('events')
+      .withIndex('by_host', (q) => q.eq('hostId', userId))
+      .collect();
+    const now = Date.now();
+    const active = events.filter((e) => {
+      const expiresAt = e.createdAt + e.retentionDays * 24 * 60 * 60 * 1000;
+      return now < expiresAt;
+    });
+    return active.sort((a, b) => b.createdAt - a.createdAt);
+  },
+});
+
 export const listByUser = query({
   args: { userId: v.id('users') },
   handler: async (ctx, { userId }) => {
@@ -48,6 +66,19 @@ export const listByUser = query({
       }
     );
     return activeEvents.sort((a, b) => b.createdAt - a.createdAt);
+  },
+});
+
+/** Returns minimal event info for invite link preview (event name, host label). Caller must be authenticated. */
+export const getInvitePreview = query({
+  args: { eventId: v.id('events') },
+  handler: async (ctx, { eventId }) => {
+    await getConvexUserId(ctx);
+    const event = await ctx.db.get(eventId);
+    if (!event) return null;
+    const host = await ctx.db.get(event.hostId);
+    const hostName = host?.clerkId ? `${host.clerkId.slice(0, 8)}…` : 'Host';
+    return { name: event.name, hostName };
   },
 });
 
